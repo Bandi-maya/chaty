@@ -18,6 +18,7 @@ import 'package:chat/ui/core/controllers/appearance_variant_controller.dart';
 import 'package:chat/ui/core/controllers/chaty_preferences_controller.dart';
 import 'package:chat/ui/core/gb/gb_theme_overrides.dart';
 import 'package:chat/ui/core/theme/theme_controller.dart';
+import 'package:chat/ui/core/ux/chaty_ux.dart';
 import 'package:chat/ui/core/widgets/click_particle_overlay.dart';
 import 'package:chat/ui/core/widgets/falling_particles_overlay.dart';
 
@@ -96,7 +97,11 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
             actions: [
               TextButton(
                 onPressed: () async {
-                  try { await _incomingCallService.declineIncoming(call); } finally { if (dialogContext.mounted) Navigator.of(dialogContext).pop(false); }
+                  try {
+                    await _incomingCallService.declineIncoming(call);
+                  } finally {
+                    if (dialogContext.mounted) Navigator.of(dialogContext).pop(false);
+                  }
                 },
                 child: Text('Decline', style: TextStyle(color: theme.dangerColor)),
               ),
@@ -132,15 +137,24 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
       _recoveryRouteOpen = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final navigator = _rootNavigatorKey.currentState;
-        if (navigator == null) { _recoveryRouteOpen = false; return; }
-        navigator.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => CreateNewPasswordScreen(email: state.session?.user.email ?? '')), (route) => false);
+        if (navigator == null) {
+          _recoveryRouteOpen = false;
+          return;
+        }
+        navigator.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => CreateNewPasswordScreen(email: state.session?.user.email ?? '')),
+          (route) => false,
+        );
       });
       return;
     }
     if (state.event == AuthChangeEvent.signedOut) {
       _presentedIncomingCallId = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _rootNavigatorKey.currentState?.pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const WelcomeScreen()), (route) => false);
+        _rootNavigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+          (route) => false,
+        );
       });
     }
   }
@@ -158,7 +172,10 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
     final airplane = _preferencesController.home.airplaneModeSimulator || _preferencesController.gbBool('yo_want_airplanemode');
     final ghost = _preferencesController.home.ghostMode || _preferencesController.gbBool('yo_want_ghostmode');
     final alwaysOnline = _preferencesController.gbBool('always_online');
-    if (airplane || ghost) { unawaited(_backend.setPresence(PresenceState.offline)); return; }
+    if (airplane || ghost) {
+      unawaited(_backend.setPresence(PresenceState.offline));
+      return;
+    }
     if (state == AppLifecycleState.resumed || alwaysOnline) {
       unawaited(_backend.setPresence(PresenceState.online));
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached || state == AppLifecycleState.hidden) {
@@ -187,11 +204,28 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
           navigatorKey: _rootNavigatorKey,
           title: 'Chaty',
           debugShowCheckedModeBanner: false,
-          theme: currentTheme.toThemeData(),
+          theme: ChatyUx.enforceTheme(currentTheme.toThemeData()),
           builder: (context, child) {
             final media = MediaQuery.of(context);
-            final scaled = media.copyWith(textScaler: TextScaler.linear((media.textScaler.scale(1.0) * _appearanceController.textScale).clamp(0.8, 1.6)));
-            return MediaQuery(data: scaled, child: ClickParticleOverlay(preferencesController: _preferencesController, child: FallingParticlesOverlay(preferencesController: _preferencesController, currentScope: 'Home', child: child ?? const SizedBox())));
+            final reduceMotion = media.disableAnimations || _themeController.useReducedMotion || currentTheme.animationLevel <= 0;
+            final scaled = media.copyWith(
+              textScaler: TextScaler.linear((media.textScaler.scale(1.0) * _appearanceController.textScale).clamp(0.8, 1.6)),
+              disableAnimations: reduceMotion,
+            );
+            Widget content = child ?? const SizedBox();
+            // Decorative particles are intentionally suppressed when the OS or
+            // Chaty reduced-motion preference requests less motion.
+            if (!reduceMotion) {
+              content = ClickParticleOverlay(
+                preferencesController: _preferencesController,
+                child: FallingParticlesOverlay(
+                  preferencesController: _preferencesController,
+                  currentScope: 'Home',
+                  child: content,
+                ),
+              );
+            }
+            return MediaQuery(data: scaled, child: content);
           },
           home: _backend.isAuthenticated ? const MainNavigationShell() : const WelcomeScreen(),
         );
