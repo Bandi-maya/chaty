@@ -37,8 +37,6 @@ extension LauncherIconVariantMetadata on LauncherIconVariant {
     }
   }
 
-  String get assetPath => 'assets/launcher_icons/${name}_512.png';
-
   String get androidAlias => name;
 
   static LauncherIconVariant fromId(String? value) {
@@ -71,7 +69,6 @@ class AppIconController extends ChangeNotifier {
   bool get isSavingCustomBrandIcon => _isSavingCustomBrandIcon;
   bool get isBusy => _isApplyingLauncherIcon || _isSavingCustomBrandIcon;
   String? get lastError => _lastError;
-  String get bundledBrandAsset => _launcherIcon.assetPath;
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -129,7 +126,10 @@ class AppIconController extends ChangeNotifier {
           'alias': variant.androidAlias,
         });
         if (applied != variant.androidAlias) {
-          throw PlatformException(code: 'launcher_icon_mismatch', message: 'Android did not confirm the selected launcher icon.');
+          throw PlatformException(
+            code: 'launcher_icon_mismatch',
+            message: 'Android did not confirm the selected launcher icon.',
+          );
         }
       }
 
@@ -201,7 +201,9 @@ class AppIconController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> resetLauncherIcon() => applyLauncherIcon(LauncherIconVariant.original);
+  Future<void> resetLauncherIcon() async {
+    await applyLauncherIcon(LauncherIconVariant.original);
+  }
 
   void clearError() {
     if (_lastError == null) return;
