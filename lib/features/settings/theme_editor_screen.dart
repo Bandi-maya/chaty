@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../ui/core/theme/theme_config.dart';
-import '../../../ui/core/theme/theme_presets.dart';
-import '../../../ui/core/theme/theme_controller.dart';
+import '../../ui/core/theme/theme_config.dart';
+import '../../ui/core/theme/theme_presets.dart';
+import '../../ui/core/theme/theme_controller.dart';
 import '../messages/message_bubble.dart';
 import '../../domain/models/chat_message.dart';
 
@@ -27,7 +27,7 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
     widget.themeController.updateThemeConfig(_current);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('Theme customization saved!'),
+        content: Text('Theme customization saved'),
         backgroundColor: Color(0xFF10B981),
       ),
     );
@@ -40,7 +40,7 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
     return Scaffold(
       backgroundColor: theme.backgroundColor,
       appBar: AppBar(
-        title: const Text('Theme & Appearance Editor (S-017)'),
+        title: const Text('Theme & appearance'),
         actions: [
           TextButton(
             onPressed: _applyAndSave,
@@ -56,7 +56,6 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Live Interactive Chat Preview Box
             Text(
               'LIVE PREVIEW',
               style: TextStyle(
@@ -84,12 +83,12 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
                       id: 'prev_1',
                       conversationId: 'prev',
                       senderId: 'other',
-                      text: 'Hey Alex! How does this custom bubble palette look?',
+                      text: 'How does this custom bubble palette look?',
                       createdAt: DateTime.now().subtract(const Duration(minutes: 5)),
                     ),
                     isMe: false,
                     theme: theme,
-                    senderName: 'Dr. Elena Rostova',
+                    senderName: 'Contact',
                     onLongPress: () {},
                   ),
                   MessageBubble(
@@ -97,7 +96,7 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
                       id: 'prev_2',
                       conversationId: 'prev',
                       senderId: 'me',
-                      text: 'It looks crisp and accessible! Full contrast guaranteed.',
+                      text: 'The preview updates as you customize the theme.',
                       createdAt: DateTime.now().subtract(const Duration(minutes: 4)),
                       deliveryState: DeliveryState.read,
                     ),
@@ -109,8 +108,6 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
-            // Contrast Warning Card (Accessibility check)
             if (theme.hasContrastIssue)
               Container(
                 padding: const EdgeInsets.all(12),
@@ -125,7 +122,7 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
                     SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Warning: The current color combination falls below WCAG contrast guidelines.',
+                        'Warning: The current color combination falls below recommended contrast levels.',
                         style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
                       ),
                     ),
@@ -133,8 +130,6 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
                 ),
               ),
             const SizedBox(height: 20),
-
-            // Preset Selector
             Text(
               'THEME PRESETS',
               style: TextStyle(
@@ -170,10 +165,8 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
               ),
             ),
             const SizedBox(height: 24),
-
-            // UI Layout Presets (Classic, Compact, Expressive, Focus)
             Text(
-              'UI LAYOUT PRESET (PRD 10.2)',
+              'UI LAYOUT',
               style: TextStyle(
                 color: theme.secondaryTextColor,
                 fontSize: 11,
@@ -207,8 +200,6 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
               }).toList(),
             ),
             const SizedBox(height: 24),
-
-            // Bubble Geometry & Style
             Text(
               'BUBBLE SHAPE & GEOMETRY',
               style: TextStyle(
@@ -234,8 +225,6 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
               }).toList(),
             ),
             const SizedBox(height: 24),
-
-            // Sliders (Corner radius, Font scaling, Density)
             Text(
               'Corner Radius (${_current.cornerRadius.toInt()}px)',
               style: TextStyle(color: theme.primaryTextColor, fontSize: 13, fontWeight: FontWeight.w600),
@@ -248,7 +237,6 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
               activeColor: theme.accentColor,
               onChanged: (v) => setState(() => _current = _current.copyWith(cornerRadius: v)),
             ),
-
             Text(
               'Font Scale (${_current.fontScale.toStringAsFixed(2)}x)',
               style: TextStyle(color: theme.primaryTextColor, fontSize: 13, fontWeight: FontWeight.w600),
@@ -261,7 +249,6 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
               activeColor: theme.accentColor,
               onChanged: (v) => setState(() => _current = _current.copyWith(fontScale: v)),
             ),
-
             Text(
               'Message Density (${_current.density.toStringAsFixed(2)}x)',
               style: TextStyle(color: theme.primaryTextColor, fontSize: 13, fontWeight: FontWeight.w600),
@@ -274,12 +261,9 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
               activeColor: theme.accentColor,
               onChanged: (v) => setState(() => _current = _current.copyWith(density: v)),
             ),
-
             const SizedBox(height: 24),
-
-            // Navigation Modes
             Text(
-              'NAVIGATION PATTERN (PRD 7)',
+              'NAVIGATION PATTERN',
               style: TextStyle(
                 color: theme.secondaryTextColor,
                 fontSize: 11,
@@ -299,7 +283,6 @@ class _ThemeEditorScreenState extends State<ThemeEditorScreen> {
                 setState(() => _current = _current.copyWith(navigationMode: val.first));
               },
             ),
-
             const SizedBox(height: 32),
           ],
         ),
