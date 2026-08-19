@@ -28,14 +28,14 @@ void main() {
     }
   });
 
-  test('premium bubble exposes and renders exactly 20 distinct bubble templates', () {
-    final settings = File('lib/features/settings/conversation/conversation_settings_page.dart').readAsStringSync();
+  test('canonical selector exposes and runtime renders exactly 20 distinct bubble templates', () {
+    final selector = File('lib/features/settings/appearance/universal_appearance_screen.dart').readAsStringSync();
     final runtime = File('lib/ui/core/messages/message_presentation_style.dart').readAsStringSync();
     const styles = <String>[
       'Rounded','Classic Tail','Tail-less','Compact','Squircle','Card','Pill','Minimal','Sharp','Soft','Wide','Narrow','Dense','Airy','Editorial','Workspace','Focus','Offset Tail','Flat','Elevated',
     ];
     for (final style in styles) {
-      expect(settings, contains("'$style'"), reason: '$style must be selectable');
+      expect(selector, contains("'$style'"), reason: '$style must be selectable from the canonical component selector');
       if (style != 'Rounded') {
         expect(runtime, contains("case '${style.toLowerCase()}':"), reason: '$style must have a runtime branch');
       }
@@ -43,14 +43,14 @@ void main() {
     expect(styles.toSet().length, 20);
   });
 
-  test('delivery presentation exposes and renders exactly 20 tick templates', () {
-    final settings = File('lib/features/settings/conversation/conversation_settings_page.dart').readAsStringSync();
+  test('canonical selector exposes and runtime renders exactly 20 tick templates', () {
+    final selector = File('lib/features/settings/appearance/universal_appearance_screen.dart').readAsStringSync();
     final runtime = File('lib/features/messages/premium_message_bubble.dart').readAsStringSync();
     const styles = <String>[
       'Default','Double Check','iOS Circle','Minimal Dot','Neon','Single Check','Bold Double','Rounded Double','Square','Pill','Outline','Filled','Tiny','Wide','Accent','Monochrome','Soft','Workspace','Focus','Classic',
     ];
     for (final style in styles) {
-      expect(settings, contains("'$style'"), reason: '$style must be selectable');
+      expect(selector, contains("'$style'"), reason: '$style must be selectable from the canonical component selector');
     }
     for (final branch in <String>[
       'double check','ios circle','minimal dot','neon','single check','bold double','rounded double','square','pill','outline','filled','tiny','wide','accent','monochrome','soft','workspace','focus','classic',
@@ -62,6 +62,13 @@ void main() {
     expect(runtime, contains('DeliveryState.delivered'));
     expect(runtime, contains('DeliveryState.read'));
     expect(runtime, contains('DeliveryState.failed'));
+  });
+
+  test('conversation settings no longer duplicates the 20-template catalogs', () {
+    final source = File('lib/features/settings/conversation/conversation_settings_page.dart').readAsStringSync();
+    expect(source, contains('UniversalAppearanceScreen'));
+    expect(source, isNot(contains('static const List<String> _bubbleShapes')));
+    expect(source, isNot(contains('static const List<String> _tickStyles')));
   });
 
   test('timeline compatibility entry delegates to premium runtime bubble', () {
