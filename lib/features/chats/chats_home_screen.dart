@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../ui/core/theme/theme_config.dart';
-import '../../../ui/core/theme/theme_controller.dart';
+import '../../ui/core/theme/theme_config.dart';
+import '../../ui/core/theme/theme_controller.dart';
 import '../../domain/models/conversation.dart';
 import '../../domain/models/user_profile.dart';
 import '../../data/repositories/mock_data_store.dart';
