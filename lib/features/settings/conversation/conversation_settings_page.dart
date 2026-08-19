@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../../ui/core/design_system/chaty_settings_primitives.dart';
+
 import '../../../ui/core/controllers/chaty_preferences_controller.dart';
+import '../../../ui/core/design_system/chaty_settings_primitives.dart';
+import '../appearance/universal_appearance_screen.dart';
 
 class ConversationSettingsPage extends StatefulWidget {
   final ChatyPreferencesController preferencesController;
@@ -15,14 +17,6 @@ class ConversationSettingsPage extends StatefulWidget {
 }
 
 class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
-  static const List<String> _bubbleShapes = <String>[
-    'Rounded','Classic Tail','Tail-less','Compact','Squircle','Card','Pill','Minimal','Sharp','Soft','Wide','Narrow','Dense','Airy','Editorial','Workspace','Focus','Offset Tail','Flat','Elevated',
-  ];
-
-  static const List<String> _tickStyles = <String>[
-    'Default','Double Check','iOS Circle','Minimal Dot','Neon','Single Check','Bold Double','Rounded Double','Square','Pill','Outline','Filled','Tiny','Wide','Accent','Monochrome','Soft','Workspace','Focus','Classic',
-  ];
-
   static const List<String> _reactionEmojis = ['❤️', '👍', '🔥', '😂', '😮', '🙏'];
   static const List<String> _wallpaperTypes = ['Pattern', 'Solid', 'Gradient', 'Image', 'ProfileBlur'];
   static const List<double> _playbackSpeeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
@@ -31,68 +25,53 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   Widget build(BuildContext context) {
     final controller = widget.preferencesController;
     final conv = controller.conversation;
-    final rawBubbleStyle = controller.gbString('bubble_style', fallback: conv.bubbleShape);
-    final rawTickStyle = controller.gbString('tick_style', fallback: conv.tickStyle);
-    final bubbleStyle = _bubbleShapes.contains(rawBubbleStyle) ? rawBubbleStyle : _bubbleShapes.first;
-    final tickStyle = _tickStyles.contains(rawTickStyle) ? rawTickStyle : _tickStyles.first;
+    final bubbleStyle = controller.gbString('bubble_style', fallback: conv.bubbleShape);
+    final tickStyle = controller.gbString('tick_style', fallback: conv.tickStyle);
 
     return ChatySettingsPage(
-      title: 'Conversation customization',
-      subtitle: 'Message templates, ticks, wallpaper, actions and quick contacts',
+      title: 'Conversation settings',
+      subtitle: 'Message layout, interactions, wallpaper and quick contacts',
       children: [
         ChatyPreviewCard(
-          title: 'Active message template',
+          title: 'Current message presentation',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('$bubbleStyle • $tickStyle • ${conv.bubbleRadius.toInt()}px radius', style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: 10),
+              Text('$bubbleStyle • $tickStyle • ${conv.bubbleRadius.toInt()}px radius', style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Container(
                   padding: EdgeInsets.all(conv.bubblePadding),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(conv.bubbleRadius),
-                  ),
-                  child: const Text('Incoming message preview', style: TextStyle(fontSize: 13)),
+                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(conv.bubbleRadius)),
+                  child: const Text('Incoming message preview', style: TextStyle(fontSize: 15)),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Align(
                 alignment: Alignment.centerRight,
                 child: Container(
                   padding: EdgeInsets.all(conv.bubblePadding),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    borderRadius: BorderRadius.circular(conv.bubbleRadius),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Outgoing reply', style: TextStyle(color: Colors.white, fontSize: 13)),
-                      SizedBox(width: 6),
-                      Icon(Icons.done_all_rounded, size: 14, color: Colors.white),
-                    ],
-                  ),
+                  decoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, borderRadius: BorderRadius.circular(conv.bubbleRadius)),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text('Outgoing reply', style: TextStyle(color: Theme.of(context).colorScheme.onPrimary, fontSize: 15)),
+                    const SizedBox(width: 7),
+                    Icon(Icons.done_all_rounded, size: 16, color: Theme.of(context).colorScheme.onPrimary),
+                  ]),
                 ),
               ),
             ],
           ),
         ),
         ChatySettingsSection(
-          title: 'Message components',
-          description: 'Each message component has 20 distinct runtime templates. Selection is persisted and applied to the real timeline.',
+          title: 'Message presentation',
+          description: 'Template selection is centralized so each component has one canonical selector and one runtime implementation.',
           children: [
-            ChatyChoiceTile<String>(
-              title: 'Bubble template — 20 styles',
-              options: _bubbleShapes,
-              selectedOption: bubbleStyle,
-              optionLabel: (value) => value,
-              onSelected: (shape) {
-                controller.updateConversation(conv.copyWith(bubbleShape: shape), logTitle: 'Bubble Template');
-                controller.updateGbFeature('bubble_style', shape);
-              },
+            ChatySettingsTile(
+              icon: Icons.auto_awesome_mosaic_outlined,
+              title: 'Bubble, ticks & composer templates',
+              subtitle: 'Choose the canonical 20-template designs for message components',
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => UniversalAppearanceScreen(preferencesController: controller))),
             ),
             ChatySliderTile(
               icon: Icons.rounded_corner_rounded,
@@ -102,20 +81,17 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
               max: 32.0,
               divisions: 28,
               valueFormatter: (value) => '${value.toInt()}px',
-              onChanged: (value) => controller.updateConversation(
-                conv.copyWith(bubbleRadius: value),
-                logTitle: 'Bubble Radius',
-              ),
+              onChanged: (value) => controller.updateConversation(conv.copyWith(bubbleRadius: value), logTitle: 'Bubble Radius'),
             ),
-            ChatyChoiceTile<String>(
-              title: 'Delivery tick template — 20 styles',
-              options: _tickStyles,
-              selectedOption: tickStyle,
-              optionLabel: (value) => value,
-              onSelected: (tick) {
-                controller.updateConversation(conv.copyWith(tickStyle: tick), logTitle: 'Tick Template');
-                controller.updateGbFeature('tick_style', tick);
-              },
+            ChatySliderTile(
+              icon: Icons.padding_rounded,
+              title: 'Bubble padding',
+              value: conv.bubblePadding,
+              min: 7,
+              max: 22,
+              divisions: 15,
+              valueFormatter: (value) => '${value.toInt()}px',
+              onChanged: (value) => controller.updateConversation(conv.copyWith(bubblePadding: value), logTitle: 'Bubble Padding'),
             ),
           ],
         ),
@@ -125,14 +101,10 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           children: [
             ChatySwitchTile(
               icon: Icons.dock_rounded,
-              iconColor: Colors.tealAccent,
               title: 'Enable quick contact sidebar',
               subtitle: 'Show a participant switcher inside active conversations',
               value: conv.enableQuickContactSidebar,
-              onChanged: (value) => controller.updateConversation(
-                conv.copyWith(enableQuickContactSidebar: value),
-                logTitle: 'Quick Contact Sidebar',
-              ),
+              onChanged: (value) => controller.updateConversation(conv.copyWith(enableQuickContactSidebar: value), logTitle: 'Quick Contact Sidebar'),
             ),
             if (conv.enableQuickContactSidebar) ...[
               ChatyChoiceTile<String>(
@@ -140,10 +112,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 options: const ['Left', 'Right'],
                 selectedOption: conv.sidebarPosition,
                 optionLabel: (value) => value,
-                onSelected: (position) => controller.updateConversation(
-                  conv.copyWith(sidebarPosition: position),
-                  logTitle: 'Sidebar Position',
-                ),
+                onSelected: (position) => controller.updateConversation(conv.copyWith(sidebarPosition: position), logTitle: 'Sidebar Position'),
               ),
               ChatySliderTile(
                 icon: Icons.opacity_rounded,
@@ -153,10 +122,7 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
                 max: 1.0,
                 divisions: 14,
                 valueFormatter: (value) => '${(value * 100).toInt()}%',
-                onChanged: (value) => controller.updateConversation(
-                  conv.copyWith(sidebarOpacity: value),
-                  logTitle: 'Sidebar Opacity',
-                ),
+                onChanged: (value) => controller.updateConversation(conv.copyWith(sidebarOpacity: value), logTitle: 'Sidebar Opacity'),
               ),
             ],
           ],
@@ -166,49 +132,36 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           children: [
             ChatySwitchTile(
               icon: Icons.touch_app_rounded,
-              iconColor: Colors.amberAccent,
-              title: 'iOS-style context popup',
-              subtitle: 'Use the floating message action menu on long press',
+              title: 'Floating context menu',
+              subtitle: 'Use the modern message action menu on long press',
               value: conv.iosStylePopupMenu,
-              onChanged: (value) => controller.updateConversation(
-                conv.copyWith(iosStylePopupMenu: value),
-                logTitle: 'iOS Popup Menu',
-              ),
+              onChanged: (value) => controller.updateConversation(conv.copyWith(iosStylePopupMenu: value), logTitle: 'Context Popup Menu'),
             ),
             ChatyChoiceTile<String>(
               title: 'Double-tap reaction',
               options: _reactionEmojis,
               selectedOption: conv.doubleTapReactionEmoji,
               optionLabel: (value) => value,
-              onSelected: (emoji) => controller.updateConversation(
-                conv.copyWith(doubleTapReactionEmoji: emoji),
-                logTitle: 'Double Tap Reaction',
-              ),
+              onSelected: (emoji) => controller.updateConversation(conv.copyWith(doubleTapReactionEmoji: emoji), logTitle: 'Double Tap Reaction'),
             ),
           ],
         ),
         ChatySettingsSection(
-          title: 'Wallpaper & audio playback',
+          title: 'Wallpaper & audio',
           children: [
             ChatyChoiceTile<String>(
               title: 'Background wallpaper',
               options: _wallpaperTypes,
               selectedOption: conv.wallpaperType,
               optionLabel: (value) => value,
-              onSelected: (wallpaper) => controller.updateConversation(
-                conv.copyWith(wallpaperType: wallpaper),
-                logTitle: 'Wallpaper Type',
-              ),
+              onSelected: (wallpaper) => controller.updateConversation(conv.copyWith(wallpaperType: wallpaper), logTitle: 'Wallpaper Type'),
             ),
             ChatyChoiceTile<double>(
               title: 'Voice note speed',
               options: _playbackSpeeds,
               selectedOption: conv.voicePlaybackSpeed,
               optionLabel: (value) => '${value}x',
-              onSelected: (speed) => controller.updateConversation(
-                conv.copyWith(voicePlaybackSpeed: speed),
-                logTitle: 'Voice Speed',
-              ),
+              onSelected: (speed) => controller.updateConversation(conv.copyWith(voicePlaybackSpeed: speed), logTitle: 'Voice Speed'),
             ),
           ],
         ),
