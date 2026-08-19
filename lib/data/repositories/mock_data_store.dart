@@ -12,25 +12,67 @@ import '../services/chaty_backend_service.dart';
 
 /// Compatibility adapter used by the existing presentation layer.
 ///
-/// The historical class name is kept so every existing screen/option can stay
-/// intact, but its data now comes from [ChatyBackendService] and Supabase rather
-/// than seeded/demo records.
+/// The historical class name is intentionally kept so old screens do not need
+/// a broad rename. Its state is server-backed; it does not seed demo records.
 class MockDataStore extends ChangeNotifier {
   final ChatyBackendService _backend = ChatyBackendService();
+  final Map<String, TaskStatus> _serverTaskStatuses = <String, TaskStatus>{};
+  Timer? _taskStatusSyncTimer;
+  bool _refreshingTaskStatuses = false;
 
   MockDataStore() {
     _backend.addListener(_onBackendChanged);
+    _scheduleTaskStatusSync(immediate: true);
   }
 
-  void _onBackendChanged() => notifyListeners();
+  void _onBackendChanged() {
+    notifyListeners();
+    _scheduleTaskStatusSync();
+  }
+
+  void _scheduleTaskStatusSync({bool immediate = false}) {
+    _taskStatusSyncTimer?.cancel();
+    _taskStatusSyncTimer = Timer(
+      immediate ? Duration.zero : const Duration(milliseconds: 280),
+      () => unawaited(_refreshTaskWorkflowStatuses()),
+    );
+  }
+
+  Future<void> _refreshTaskWorkflowStatuses() async {
+    if (_refreshingTaskStatuses || !_backend.isAuthenticated) return;
+    _refreshingTaskStatuses = true;
+    try {
+      final raw = await Supabase.instance.client.rpc('get_my_tasks');
+      if (raw is List) {
+        final next = <String, TaskStatus>{};
+        for (final item in raw.whereType<Map>()) {
+          final row = Map<String, dynamic>.from(item);
+          final id = row['task_id']?.toString() ?? '';
+          if (id.isEmpty) continue;
+          next[id] = _taskStatusFromDatabase(row['status']?.toString());
+        }
+        _serverTaskStatuses
+          ..clear()
+          ..addAll(next);
+        notifyListeners();
+      }
+    } catch (_) {
+      // The backend cache remains usable if a status reconciliation request
+      // fails temporarily. Realtime or the next mutation will retry it.
+    } finally {
+      _refreshingTaskStatuses = false;
+    }
+  }
 
   @override
   void dispose() {
+    _taskStatusSyncTimer?.cancel();
     _backend.removeListener(_onBackendChanged);
     super.dispose();
   }
 
-  UserProfile get currentUser => _backend.currentUser ?? UserProfile(
+  UserProfile get currentUser => _backend.currentUser ??
+      UserProfile(
         id: 'usr_guest',
         displayName: 'Chaty User',
         username: 'guest',
@@ -48,7 +90,13 @@ class MockDataStore extends ChangeNotifier {
   List<UserProfile> get contacts =>
       _backend.allUsers.where((user) => user.id != currentUser.id).toList();
   List<Conversation> get conversations => _backend.conversations;
-  List<ChatTask> get tasks => _backend.tasks;
+  List<ChatTask> get tasks => _backend.tasks
+      .map(
+        (task) => task.copyWith(
+          status: _serverTaskStatuses[task.id] ?? task.status,
+        ),
+      )
+      .toList(growable: false);
   List<CallRecord> get calls => _backend.calls;
   List<UpdateStory> get stories => _backend.stories;
   List<LinkedDevice> get linkedDevices => _backend.currentUserDevices;
@@ -228,7 +276,7 @@ class MockDataStore extends ChangeNotifier {
     List<String> labels = const <String>[],
   }) {
     unawaited(
-      _backend.createTask(
+      createTaskAsync(
         sourceConversationId: sourceConversationId,
         sourceMessageId: sourceMessageId,
         title: title,
@@ -250,17 +298,21 @@ class MockDataStore extends ChangeNotifier {
     required TaskPriority priority,
     required DateTime dueAt,
     List<String> labels = const <String>[],
-  }) =>
-      _backend.createTask(
-        sourceConversationId: sourceConversationId,
-        sourceMessageId: sourceMessageId,
-        title: title,
-        description: description,
-        assigneeIds: assigneeIds,
-        priority: priority,
-        dueAt: dueAt,
-        labels: labels,
-      );
+  }) async {
+    final task = await _backend.createTask(
+      sourceConversationId: sourceConversationId,
+      sourceMessageId: sourceMessageId,
+      title: title,
+      description: description,
+      assigneeIds: assigneeIds,
+      priority: priority,
+      dueAt: dueAt,
+      labels: labels,
+    );
+    _serverTaskStatuses[task.id] = TaskStatus.inbox;
+    _scheduleTaskStatusSync();
+    return task.copyWith(status: TaskStatus.inbox);
+  }
 
   Future<void> updateTaskAsync({
     required String taskId,
@@ -283,10 +335,28 @@ class MockDataStore extends ChangeNotifier {
         'p_labels': labels,
       },
     );
+    _scheduleTaskStatusSync();
   }
 
-  void updateTaskStatus(String taskId, TaskStatus status) =>
-      _backend.updateTaskStatus(taskId, status);
+  void updateTaskStatus(String taskId, TaskStatus status) {
+    _serverTaskStatuses[taskId] = status;
+    notifyListeners();
+    unawaited(_commitTaskStatus(taskId, status));
+  }
+
+  Future<void> _commitTaskStatus(String taskId, TaskStatus status) async {
+    try {
+      await Supabase.instance.client.rpc(
+        'update_task_status',
+        params: <String, dynamic>{
+          'p_task_id': taskId,
+          'p_status': _taskStatusToDatabase(status),
+        },
+      );
+    } finally {
+      _scheduleTaskStatusSync();
+    }
+  }
 
   void addStory(String content) => _backend.addStory(content);
   void markStoryViewed(String storyId) => _backend.markStoryViewed(storyId);
@@ -314,22 +384,38 @@ class MockDataStore extends ChangeNotifier {
   Future<void> updateUser(UserProfile updated) =>
       _backend.updateCurrentUser(updated);
 
-  /// Kept only for binary/source compatibility with old screens. It no longer
-  /// changes identity. Supabase Auth owns the active session.
   void switchDemoAccount(UserProfile user) {
     if (user.id == _backend.currentUser?.id) notifyListeners();
   }
 
   static String _taskPriorityToDatabase(TaskPriority priority) {
-    switch (priority) {
-      case TaskPriority.low:
-        return 'low';
-      case TaskPriority.medium:
-        return 'normal';
-      case TaskPriority.high:
-        return 'high';
-      case TaskPriority.urgent:
-        return 'urgent';
-    }
+    return switch (priority) {
+      TaskPriority.low => 'low',
+      TaskPriority.medium => 'normal',
+      TaskPriority.high => 'high',
+      TaskPriority.urgent => 'urgent',
+    };
+  }
+
+  static TaskStatus _taskStatusFromDatabase(String? value) {
+    return switch (value) {
+      'assigned' => TaskStatus.assigned,
+      'in_progress' => TaskStatus.inProgress,
+      'blocked' => TaskStatus.blocked,
+      'completed' => TaskStatus.completed,
+      'archived' => TaskStatus.archived,
+      _ => TaskStatus.inbox,
+    };
+  }
+
+  static String _taskStatusToDatabase(TaskStatus value) {
+    return switch (value) {
+      TaskStatus.inbox => 'inbox',
+      TaskStatus.assigned => 'assigned',
+      TaskStatus.inProgress => 'in_progress',
+      TaskStatus.blocked => 'blocked',
+      TaskStatus.completed => 'completed',
+      TaskStatus.archived => 'archived',
+    };
   }
 }
