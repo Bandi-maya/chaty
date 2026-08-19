@@ -8,6 +8,7 @@ import 'package:chat/data/repositories/mock_data_store.dart';
 import 'package:chat/data/services/chaty_backend_service.dart';
 import 'package:chat/data/services/message_automation_service.dart';
 import 'package:chat/domain/models/user_profile.dart';
+import 'package:chat/features/auth/create_new_password_screen.dart';
 import 'package:chat/features/auth/splash_screen.dart';
 import 'package:chat/injection/locator.dart';
 import 'package:chat/ui/core/controllers/chaty_preferences_controller.dart';
@@ -24,6 +25,8 @@ const String _supabasePublishableKey = String.fromEnvironment(
   'SUPABASE_PUBLISHABLE_KEY',
   defaultValue: 'sb_publishable_gFpVYJctaDkRRgttvnUl-A_TKu81hFF',
 );
+
+final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,7 +53,9 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
   late final ThemeController _themeController;
   late final ChatyPreferencesController _preferencesController;
   late final ChatyBackendService _backend;
-  late MessageAutomationService _automationService;
+  late final MessageAutomationService _automationService;
+  late final StreamSubscription<AuthState> _authUiSubscription;
+  bool _recoveryRouteOpen = false;
 
   @override
   void initState() {
@@ -63,6 +68,31 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
       preferencesController: _preferencesController,
       dataStore: locator<MockDataStore>(),
     );
+    _authUiSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
+      _handleAuthUiEvent,
+    );
+  }
+
+  void _handleAuthUiEvent(AuthState state) {
+    if (state.event != AuthChangeEvent.passwordRecovery || _recoveryRouteOpen) {
+      return;
+    }
+    _recoveryRouteOpen = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navigator = _rootNavigatorKey.currentState;
+      if (navigator == null) {
+        _recoveryRouteOpen = false;
+        return;
+      }
+      navigator.pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => CreateNewPasswordScreen(
+            email: state.session?.user.email ?? '',
+          ),
+        ),
+        (route) => false,
+      );
+    });
   }
 
   @override
@@ -71,7 +101,9 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
     final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
     if (_themeController.globalTheme.id == 'monochrome_dark' ||
         _themeController.globalTheme.id == 'monochrome_light') {
-      _themeController.setGlobalTheme(ThemePresets.getSystemDefaultTheme(brightness));
+      _themeController.setGlobalTheme(
+        ThemePresets.getSystemDefaultTheme(brightness),
+      );
     }
   }
 
@@ -91,6 +123,7 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(_authUiSubscription.cancel());
     _automationService.dispose();
     super.dispose();
   }
@@ -98,10 +131,14 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge(<Listenable>[_themeController, _preferencesController]),
+      listenable: Listenable.merge(<Listenable>[
+        _themeController,
+        _preferencesController,
+      ]),
       builder: (context, _) {
         final currentTheme = _themeController.globalTheme;
         return MaterialApp(
+          navigatorKey: _rootNavigatorKey,
           title: 'Chaty',
           debugShowCheckedModeBanner: false,
           theme: currentTheme.toThemeData(),
