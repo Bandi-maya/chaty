@@ -16,7 +16,6 @@ import 'package:chat/ui/core/controllers/appearance_variant_controller.dart';
 import 'package:chat/ui/core/controllers/chaty_preferences_controller.dart';
 import 'package:chat/ui/core/gb/gb_theme_overrides.dart';
 import 'package:chat/ui/core/theme/theme_controller.dart';
-import 'package:chat/ui/core/theme/theme_presets.dart';
 import 'package:chat/ui/core/widgets/click_particle_overlay.dart';
 import 'package:chat/ui/core/widgets/falling_particles_overlay.dart';
 
@@ -103,10 +102,9 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
   @override
   void didChangePlatformBrightness() {
     super.didChangePlatformBrightness();
-    final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
-    if (_themeController.globalTheme.id == 'monochrome_dark' || _themeController.globalTheme.id == 'monochrome_light') {
-      _themeController.setGlobalTheme(ThemePresets.getSystemDefaultTheme(brightness));
-    }
+    _themeController.applyPlatformBrightness(
+      WidgetsBinding.instance.platformDispatcher.platformBrightness,
+    );
   }
 
   @override
@@ -140,7 +138,8 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
     return ListenableBuilder(
       listenable: Listenable.merge(<Listenable>[_themeController, _preferencesController, _appearanceController, _backend]),
       builder: (context, _) {
-        final currentTheme = GbThemeOverrides.resolve(_themeController.globalTheme, _preferencesController);
+        final currentTheme = GbThemeOverrides.resolve(_themeController.baseTheme, _preferencesController);
+        _themeController.setRuntimeThemeOverride(currentTheme);
         return MaterialApp(
           navigatorKey: _rootNavigatorKey,
           title: 'Chaty',
