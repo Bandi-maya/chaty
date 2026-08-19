@@ -52,21 +52,24 @@ void main() {
 
   testWidgets('state views expose a live semantic announcement', (tester) async {
     final handle = tester.ensureSemantics();
-    addTearDown(handle.dispose);
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: ChatyStateView(
-            kind: ChatyStateKind.error,
-            title: 'Unable to load',
-            message: 'Try again.',
+    try {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: ChatyStateView(
+              kind: ChatyStateKind.error,
+              title: 'Unable to load',
+              message: 'Try again.',
+            ),
           ),
         ),
-      ),
-    );
-    final semantics = tester.getSemantics(find.byType(ChatyStateView));
-    expect(semantics.label, contains('Unable to load'));
-    expect(semantics.label, contains('Try again'));
+      );
+      final semantics = tester.getSemantics(find.byType(ChatyStateView));
+      expect(semantics.label, contains('Unable to load'));
+      expect(semantics.label, contains('Try again'));
+    } finally {
+      handle.dispose();
+    }
   });
 
   test('app propagates reduced-motion and suppresses decorative particles', () {
