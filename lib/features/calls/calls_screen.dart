@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../ui/core/theme/theme_config.dart';
-import '../../../ui/core/theme/theme_controller.dart';
-import '../../../ui/core/ux/chaty_ux.dart';
+import '../../ui/core/theme/theme_config.dart';
+import '../../ui/core/theme/theme_controller.dart';
+import '../../ui/core/ux/chaty_ux.dart';
 import '../../data/repositories/mock_data_store.dart';
 import '../../data/services/chaty_call_service.dart';
 import '../../domain/models/conversation.dart';
