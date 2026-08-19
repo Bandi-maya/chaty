@@ -141,7 +141,7 @@ class SettingsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: theme.backgroundColor,
       body: SafeArea(child: Align(alignment: Alignment.topCenter, child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 820),
+        constraints: const BoxConstraints(maxWidth: 860),
         child: ListView(keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag, padding: const EdgeInsets.fromLTRB(16, 12, 16, 104), children: [
           Row(children: [Expanded(child: Text('Settings', style: TextStyle(color: theme.primaryTextColor, fontSize: 29, fontWeight: FontWeight.w800, letterSpacing: -.6))), IconButton(tooltip: 'Search settings', onPressed: () => showSearch(context: context, delegate: SettingsSearchDelegate(allSettings: _buildSearchIndex(context))), icon: const Icon(Icons.search_rounded, size: 25)), IconButton(tooltip: 'Reset options', onPressed: () => _showResetOptions(context), icon: const Icon(Icons.more_vert_rounded, size: 25))]),
           const SizedBox(height: 14),
