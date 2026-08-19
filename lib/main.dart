@@ -1,11 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chat/data/repositories/mock_data_store.dart';
 import 'package:chat/data/services/chaty_backend_service.dart';
 import 'package:chat/data/services/message_automation_service.dart';
+import 'package:chat/domain/models/user_profile.dart';
 import 'package:chat/features/auth/splash_screen.dart';
 import 'package:chat/injection/locator.dart';
 import 'package:chat/ui/core/controllers/chaty_preferences_controller.dart';
