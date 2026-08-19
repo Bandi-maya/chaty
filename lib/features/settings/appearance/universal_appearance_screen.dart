@@ -324,7 +324,7 @@ class _VariantSection extends StatelessWidget {
           ),
           child: Icon(icon, color: scheme.onPrimaryContainer, size: 20),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w750)),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -380,7 +380,7 @@ class _VariantSection extends StatelessWidget {
                           width: 30,
                           child: Text('${index + 1}'.padLeft(2, '0'), style: Theme.of(context).textTheme.labelSmall),
                         ),
-                        title: Text(option, style: TextStyle(fontWeight: active ? FontWeight.w800 : FontWeight.w550)),
+                        title: Text(option, style: TextStyle(fontWeight: active ? FontWeight.w800 : FontWeight.w500)),
                         trailing: active ? const Icon(Icons.check_rounded) : const Icon(Icons.chevron_right_rounded),
                         onTap: () => Navigator.of(context).pop(option),
                       );
