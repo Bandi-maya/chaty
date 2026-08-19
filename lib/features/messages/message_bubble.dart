@@ -1,6 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
 import '../../../ui/core/theme/theme_config.dart';
 import '../../domain/models/chat_message.dart';
+import '../../domain/models/visual_preferences.dart';
 import '../../ui/core/widgets/app_avatar.dart';
 
 class MessageBubble extends StatelessWidget {
@@ -12,6 +16,7 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onTaskTap;
   final Function(String emoji)? onReactionTap;
   final VoidCallback? onMediaTap;
+  final String bubbleVariant;
 
   const MessageBubble({
     super.key,
@@ -23,85 +28,118 @@ class MessageBubble extends StatelessWidget {
     this.onTaskTap,
     this.onReactionTap,
     this.onMediaTap,
+    this.bubbleVariant = 'Soft Rounded',
   });
 
-  BorderRadius _getBubbleBorderRadius() {
-    final r = Radius.circular(theme.cornerRadius);
-    switch (theme.bubbleStyle) {
-      case AppBubbleStyle.rounded:
-        return BorderRadius.only(
-          topLeft: r,
-          topRight: r,
-          bottomLeft: isMe ? r : const Radius.circular(3),
-          bottomRight: isMe ? const Radius.circular(3) : r,
-        );
-      case AppBubbleStyle.softSquare:
-        return BorderRadius.circular(6);
-      case AppBubbleStyle.pill:
-        return BorderRadius.circular(24);
-      case AppBubbleStyle.sharpTail:
-        return BorderRadius.only(
-          topLeft: r,
-          topRight: r,
-          bottomLeft: isMe ? r : Radius.zero,
-          bottomRight: isMe ? Radius.zero : r,
-        );
+  Color _readable(Color background, Color preferred) {
+    if (ThemeConfig.calculateContrastRatio(preferred, background) >= 4.5) {
+      return preferred;
     }
+    final blackRatio = ThemeConfig.calculateContrastRatio(Colors.black, background);
+    final whiteRatio = ThemeConfig.calculateContrastRatio(Colors.white, background);
+    return blackRatio >= whiteRatio ? Colors.black : Colors.white;
   }
 
-  Widget _buildDeliveryIcon() {
+  String _formatTime(DateTime dt) {
+    final local = dt.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildDeliveryIcon(Color color) {
+    final muted = color.withValues(alpha: 0.72);
     Widget icon;
     switch (message.deliveryState) {
       case DeliveryState.queued:
       case DeliveryState.sending:
-        icon = const Icon(Icons.access_time_rounded, key: ValueKey('queued'), size: 12, color: Colors.white70);
-        break;
+        icon = Icon(
+          Icons.access_time_rounded,
+          key: const ValueKey<String>('queued'),
+          size: 12,
+          color: muted,
+        );
       case DeliveryState.sent:
-        icon = const Icon(Icons.done_rounded, key: ValueKey('sent'), size: 13, color: Colors.white70);
-        break;
+        icon = Icon(
+          Icons.done_rounded,
+          key: const ValueKey<String>('sent'),
+          size: 13,
+          color: muted,
+        );
       case DeliveryState.delivered:
-        icon = const Icon(Icons.done_all_rounded, key: ValueKey('delivered'), size: 14, color: Colors.white70);
-        break;
+        icon = Icon(
+          Icons.done_all_rounded,
+          key: const ValueKey<String>('delivered'),
+          size: 14,
+          color: muted,
+        );
       case DeliveryState.read:
-        icon = const Icon(Icons.done_all_rounded, key: ValueKey('read'), size: 14, color: Color(0xFF38BDF8));
-        break;
+        final blue = const Color(0xFF0284C7);
+        icon = Icon(
+          Icons.done_all_rounded,
+          key: const ValueKey<String>('read'),
+          size: 14,
+          color: ThemeConfig.calculateContrastRatio(blue, _bubbleBackground()) >= 3
+              ? blue
+              : color,
+        );
       case DeliveryState.failed:
-        icon = const Icon(Icons.error_outline_rounded, key: ValueKey('failed'), size: 12, color: Colors.redAccent);
-        break;
+        icon = Icon(
+          Icons.error_outline_rounded,
+          key: const ValueKey<String>('failed'),
+          size: 13,
+          color: theme.dangerColor,
+        );
     }
-
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 180),
-      transitionBuilder: (child, animation) => FadeTransition(
-        opacity: animation,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.85, end: 1.0).animate(animation),
-          child: child,
-        ),
-      ),
       child: icon,
     );
   }
 
+  Color _bubbleBackground() {
+    final base = isMe ? theme.outgoingBubbleColor : theme.incomingBubbleColor;
+    final index = VisualPreferences.bubbleStyles.indexOf(bubbleVariant).clamp(0, 19);
+    if (index == 17) {
+      return theme.brightness == Brightness.dark
+          ? const Color(0xFF202124)
+          : const Color(0xFFF1F3F4);
+    }
+    if (index == 18) return theme.cardColor;
+    if (index == 19) return theme.surfaceColor;
+    return base;
+  }
 
-  String _formatTime(DateTime dt) {
-    final hour = dt.hour.toString().padLeft(2, '0');
-    final min = dt.minute.toString().padLeft(2, '0');
-    return '$hour:$min';
+  _BubbleProfile get _profile => _BubbleProfile.fromStyle(bubbleVariant, theme);
+
+  BorderRadius _bubbleRadius(_BubbleProfile profile) {
+    if (profile.pill) return BorderRadius.circular(28);
+    final radius = Radius.circular(profile.radius);
+    if (!profile.tail) return BorderRadius.circular(profile.radius);
+    return BorderRadius.only(
+      topLeft: radius,
+      topRight: radius,
+      bottomLeft: isMe ? radius : Radius.circular(profile.tailRadius),
+      bottomRight: isMe ? Radius.circular(profile.tailRadius) : radius,
+    );
+  }
+
+  Color _subtleSurface(Color bubble, Color text) {
+    final amount = theme.brightness == Brightness.dark ? 0.12 : 0.08;
+    return Color.alphaBlend(text.withValues(alpha: amount), bubble);
   }
 
   @override
   Widget build(BuildContext context) {
-    // System Event Banner
     if (message.type == MessageType.system) {
       return Center(
         child: Container(
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
-          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 12),
+          padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 12),
           decoration: BoxDecoration(
-            color: theme.surfaceColor.withValues(alpha: 0.8),
+            color: theme.surfaceColor,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: theme.cardColor),
+            border: Border.all(
+              color: theme.secondaryTextColor.withValues(alpha: 0.12),
+            ),
           ),
           child: Text(
             message.text,
@@ -115,7 +153,6 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    // Deleted for everyone
     if (message.isDeletedForEveryone) {
       return Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -123,21 +160,22 @@ class MessageBubble extends StatelessWidget {
           margin: const EdgeInsets.symmetric(vertical: 3, horizontal: 12),
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
           decoration: BoxDecoration(
-            color: theme.surfaceColor.withValues(alpha: 0.5),
+            color: theme.surfaceColor,
             borderRadius: BorderRadius.circular(theme.cornerRadius),
-            border: Border.all(color: theme.surfaceColor),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
-            children: [
+            children: <Widget>[
               Icon(Icons.block_rounded, size: 14, color: theme.secondaryTextColor),
               const SizedBox(width: 6),
-              Text(
-                'This message was deleted by sender',
-                style: TextStyle(
-                  color: theme.secondaryTextColor,
-                  fontSize: 13 * theme.fontScale,
-                  fontStyle: FontStyle.italic,
+              Flexible(
+                child: Text(
+                  'This message was deleted by sender',
+                  style: TextStyle(
+                    color: theme.secondaryTextColor,
+                    fontSize: 13 * theme.fontScale,
+                    fontStyle: FontStyle.italic,
+                  ),
                 ),
               ),
             ],
@@ -146,87 +184,113 @@ class MessageBubble extends StatelessWidget {
       );
     }
 
-    final bubbleBg = isMe ? theme.outgoingBubbleColor : theme.incomingBubbleColor;
-    final textColor = isMe ? theme.outgoingTextColor : theme.incomingTextColor;
+    final profile = _profile;
+    final bubble = _bubbleBackground();
+    final preferredText = isMe ? theme.outgoingTextColor : theme.incomingTextColor;
+    final textColor = _readable(bubble, preferredText);
+    final subtleSurface = _subtleSurface(bubble, textColor);
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final maxBubbleWidth = math.min(560.0, math.max(220.0, viewportWidth * 0.76));
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3.0, horizontal: 12.0),
+      padding: EdgeInsets.symmetric(
+        vertical: profile.verticalGap,
+        horizontal: profile.horizontalGap,
+      ),
       child: Row(
         mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // Left Avatar for incoming group messages
+        children: <Widget>[
           if (!isMe && senderName != null)
             Padding(
-              padding: const EdgeInsets.only(right: 8.0, bottom: 2.0),
+              padding: const EdgeInsets.only(right: 8, bottom: 2),
               child: AppAvatar(
-                initials: senderName!.split(' ').map((e) => e.isEmpty ? '' : e[0]).take(2).join(),
+                initials: senderName!
+                    .split(' ')
+                    .where((part) => part.isNotEmpty)
+                    .map((part) => part[0])
+                    .take(2)
+                    .join(),
                 colorHex: '0xFF6366F1',
                 size: 28,
               ),
             ),
-
           Flexible(
             child: GestureDetector(
               onLongPress: onLongPress,
               child: Column(
-                crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                children: [
+                crossAxisAlignment:
+                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                children: <Widget>[
                   Container(
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.of(context).size.width * 0.76,
+                    constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: profile.horizontalPadding,
+                      vertical: profile.verticalPadding,
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: bubbleBg,
-                      borderRadius: _getBubbleBorderRadius(),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 3,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
+                      color: bubble,
+                      borderRadius: _bubbleRadius(profile),
+                      border: profile.outlined
+                          ? Border.all(
+                              color: profile.accentBorder
+                                  ? theme.accentColor.withValues(alpha: 0.55)
+                                  : textColor.withValues(alpha: 0.16),
+                            )
+                          : null,
+                      boxShadow: profile.elevated
+                          ? <BoxShadow>[
+                              BoxShadow(
+                                color: Colors.black.withValues(
+                                  alpha: theme.brightness == Brightness.dark
+                                      ? 0.20
+                                      : 0.08,
+                                ),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ]
+                          : const <BoxShadow>[],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Group Sender Name Header
+                      children: <Widget>[
                         if (!isMe && senderName != null)
                           Padding(
-                            padding: const EdgeInsets.only(bottom: 3.0),
+                            padding: const EdgeInsets.only(bottom: 3),
                             child: Text(
                               senderName!,
                               style: TextStyle(
-                                color: theme.accentColor,
+                                color: _readable(bubble, theme.accentColor),
                                 fontSize: 11.5 * theme.fontScale,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
-
-                        // Reply Context Quote Header
                         if (message.replyToMessageId != null)
                           Container(
                             margin: const EdgeInsets.only(bottom: 6),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 5,
+                            ),
                             decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
+                              color: subtleSurface,
+                              borderRadius: BorderRadius.circular(7),
                               border: Border(
                                 left: BorderSide(
-                                  color: isMe ? Colors.white70 : theme.accentColor,
+                                  color: _readable(bubble, theme.accentColor),
                                   width: 3,
                                 ),
                               ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
+                              children: <Widget>[
                                 Text(
                                   message.replyToSenderName ?? 'Reply',
                                   style: TextStyle(
-                                    color: isMe ? Colors.white : theme.accentColor,
+                                    color: textColor,
                                     fontSize: 11 * theme.fontScale,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -236,68 +300,71 @@ class MessageBubble extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: textColor.withValues(alpha: 0.8),
+                                    color: textColor.withValues(alpha: 0.76),
                                     fontSize: 11 * theme.fontScale,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-
-                        // Task Card Message Type
                         if (message.type == MessageType.taskCard)
                           InkWell(
                             onTap: onTaskTap,
+                            borderRadius: BorderRadius.circular(10),
                             child: Container(
                               margin: const EdgeInsets.symmetric(vertical: 4),
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.2),
+                                color: subtleSurface,
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: theme.accentColor.withValues(alpha: 0.4)),
+                                border: Border.all(
+                                  color: theme.accentColor.withValues(alpha: 0.35),
+                                ),
                               ),
                               child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: theme.accentColor.withValues(alpha: 0.2),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(Icons.task_alt_rounded, color: theme.accentColor, size: 18),
+                                children: <Widget>[
+                                  Icon(
+                                    Icons.task_alt_rounded,
+                                    color: _readable(subtleSurface, theme.accentColor),
+                                    size: 22,
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
+                                      children: <Widget>[
                                         Text(
                                           message.text,
                                           style: TextStyle(
-                                            color: textColor,
+                                            color: _readable(subtleSurface, textColor),
                                             fontWeight: FontWeight.bold,
                                             fontSize: 13 * theme.fontScale,
                                           ),
                                         ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          'Linked Task • Tap to open board',
+                                          'Linked task • Tap for full details',
                                           style: TextStyle(
-                                            color: textColor.withValues(alpha: 0.7),
+                                            color: _readable(subtleSurface, textColor)
+                                                .withValues(alpha: 0.72),
                                             fontSize: 11 * theme.fontScale,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
+                                  Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: _readable(subtleSurface, textColor)
+                                        .withValues(alpha: 0.72),
+                                  ),
                                 ],
                               ),
                             ),
                           ),
-
-                        // Image / Video Attachment
                         if (message.attachment != null &&
-                            (message.attachment!.type == 'image' || message.attachment!.type == 'video'))
+                            (message.attachment!.type == 'image' ||
+                                message.attachment!.type == 'video'))
                           GestureDetector(
                             onTap: onMediaTap,
                             child: Container(
@@ -305,32 +372,30 @@ class MessageBubble extends StatelessWidget {
                               height: 160,
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                color: Colors.black26,
+                                color: subtleSurface,
                                 borderRadius: BorderRadius.circular(10),
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF3B82F6), Color(0xFF8B5CF6)],
+                                border: Border.all(
+                                  color: textColor.withValues(alpha: 0.10),
                                 ),
                               ),
                               child: Stack(
                                 alignment: Alignment.center,
-                                children: [
+                                children: <Widget>[
                                   Icon(
-                                    message.attachment!.type == 'video' ? Icons.play_circle_fill_rounded : Icons.image_rounded,
+                                    message.attachment!.type == 'video'
+                                        ? Icons.play_circle_fill_rounded
+                                        : Icons.image_rounded,
                                     size: 44,
-                                    color: Colors.white,
+                                    color: textColor.withValues(alpha: 0.84),
                                   ),
                                   Positioned(
-                                    bottom: 6,
-                                    right: 6,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black54,
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        message.attachment!.size,
-                                        style: const TextStyle(color: Colors.white, fontSize: 10),
+                                    bottom: 7,
+                                    right: 8,
+                                    child: Text(
+                                      message.attachment!.size,
+                                      style: TextStyle(
+                                        color: textColor.withValues(alpha: 0.70),
+                                        fontSize: 10,
                                       ),
                                     ),
                                   ),
@@ -338,98 +403,115 @@ class MessageBubble extends StatelessWidget {
                               ),
                             ),
                           ),
-
-                        // Audio Voice Note Attachment
-                        if (message.attachment != null && message.attachment!.type == 'audio')
-                          Container(
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: theme.accentColor,
-                                    shape: BoxShape.circle,
+                        if (message.attachment != null &&
+                            message.attachment!.type == 'audio')
+                          InkWell(
+                            onTap: onMediaTap,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 7,
+                              ),
+                              decoration: BoxDecoration(
+                                color: subtleSurface,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: <Widget>[
+                                  Icon(
+                                    Icons.play_circle_fill_rounded,
+                                    color: textColor,
+                                    size: 30,
                                   ),
-                                  child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 18),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: List.generate(
-                                          16,
-                                          (i) => Expanded(
-                                            child: Container(
-                                              margin: const EdgeInsets.symmetric(horizontal: 1),
-                                              height: (8 + (i % 5) * 4).toDouble(),
-                                              decoration: BoxDecoration(
-                                                color: textColor.withValues(alpha: 0.7),
-                                                borderRadius: BorderRadius.circular(2),
-                                              ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: List<Widget>.generate(
+                                        16,
+                                        (index) => Expanded(
+                                          child: Container(
+                                            margin: const EdgeInsets.symmetric(
+                                              horizontal: 1,
+                                            ),
+                                            height: (7 + (index % 5) * 3).toDouble(),
+                                            decoration: BoxDecoration(
+                                              color: textColor.withValues(alpha: 0.62),
+                                              borderRadius: BorderRadius.circular(2),
                                             ),
                                           ),
                                         ),
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '0:${message.attachment!.durationSeconds.toString().padLeft(2, '0')}',
-                                        style: TextStyle(color: textColor.withValues(alpha: 0.7), fontSize: 10),
-                                      ),
-                                    ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '0:${message.attachment!.durationSeconds.toString().padLeft(2, '0')}',
+                                    style: TextStyle(
+                                      color: textColor.withValues(alpha: 0.72),
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-
-                        // Document Attachment
-                        if (message.attachment != null && message.attachment!.type == 'document')
-                          Container(
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.insert_drive_file_rounded, color: Colors.redAccent, size: 24),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        message.attachment!.name,
-                                        style: TextStyle(
-                                          color: textColor,
-                                          fontSize: 12.5 * theme.fontScale,
-                                          fontWeight: FontWeight.bold,
+                        if (message.attachment != null &&
+                            message.attachment!.type == 'document')
+                          InkWell(
+                            onTap: onMediaTap,
+                            borderRadius: BorderRadius.circular(9),
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: subtleSurface,
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Row(
+                                children: <Widget>[
+                                  Icon(
+                                    Icons.description_rounded,
+                                    color: textColor,
+                                    size: 24,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(
+                                          message.attachment!.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: textColor,
+                                            fontSize: 12.5 * theme.fontScale,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        message.attachment!.size,
-                                        style: TextStyle(color: textColor.withValues(alpha: 0.7), fontSize: 10.5),
-                                      ),
-                                    ],
+                                        Text(
+                                          message.attachment!.size,
+                                          style: TextStyle(
+                                            color: textColor.withValues(alpha: 0.7),
+                                            fontSize: 10.5,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  Icon(
+                                    Icons.chevron_right_rounded,
+                                    color: textColor.withValues(alpha: 0.7),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-
-                        // Text Body
-                        if (message.type != MessageType.taskCard && message.text.isNotEmpty)
+                        if (message.type != MessageType.taskCard &&
+                            message.text.isNotEmpty)
                           Text(
                             message.text,
                             style: TextStyle(
@@ -438,50 +520,56 @@ class MessageBubble extends StatelessWidget {
                               height: 1.35,
                             ),
                           ),
-
                         const SizedBox(height: 3),
-
-                        // Timestamp & Delivery State Row
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            if (message.isPinned) ...[
-                              Icon(Icons.push_pin_rounded, size: 11, color: textColor.withValues(alpha: 0.7)),
+                          children: <Widget>[
+                            if (message.isPinned) ...<Widget>[
+                              Icon(
+                                Icons.push_pin_rounded,
+                                size: 11,
+                                color: textColor.withValues(alpha: 0.72),
+                              ),
                               const SizedBox(width: 3),
                             ],
-                            if (message.isStarred) ...[
-                              const Icon(Icons.star_rounded, size: 11, color: Colors.amber),
+                            if (message.isStarred) ...<Widget>[
+                              const Icon(
+                                Icons.star_rounded,
+                                size: 11,
+                                color: Colors.amber,
+                              ),
                               const SizedBox(width: 3),
                             ],
                             Text(
                               _formatTime(message.createdAt),
                               style: TextStyle(
-                                color: textColor.withValues(alpha: 0.65),
+                                color: textColor.withValues(alpha: 0.66),
                                 fontSize: 10.5 * theme.fontScale,
                               ),
                             ),
-                            if (isMe) ...[
+                            if (isMe) ...<Widget>[
                               const SizedBox(width: 4),
-                              _buildDeliveryIcon(),
+                              _buildDeliveryIcon(textColor),
                             ],
                           ],
                         ),
                       ],
                     ),
                   ),
-
-                  // Reactions Bar
                   if (message.reactions.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.only(top: 2.0, left: 4.0, right: 4.0),
+                      padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
                       child: Wrap(
                         spacing: 4,
-                        children: message.reactions.map((r) {
+                        children: message.reactions.map((reaction) {
                           return GestureDetector(
-                            onTap: () => onReactionTap?.call(r.emoji),
+                            onTap: () => onReactionTap?.call(reaction.emoji),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
                               decoration: BoxDecoration(
                                 color: theme.cardColor,
                                 borderRadius: BorderRadius.circular(12),
@@ -492,12 +580,15 @@ class MessageBubble extends StatelessWidget {
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(r.emoji, style: const TextStyle(fontSize: 12)),
-                                  if (r.userIds.length > 1) ...[
+                                children: <Widget>[
+                                  Text(
+                                    reaction.emoji,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  if (reaction.userIds.length > 1) ...<Widget>[
                                     const SizedBox(width: 3),
                                     Text(
-                                      r.userIds.length.toString(),
+                                      reaction.userIds.length.toString(),
                                       style: TextStyle(
                                         color: theme.primaryTextColor,
                                         fontSize: 10.5,
@@ -518,6 +609,62 @@ class MessageBubble extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _BubbleProfile {
+  final double radius;
+  final double tailRadius;
+  final double horizontalPadding;
+  final double verticalPadding;
+  final double horizontalGap;
+  final double verticalGap;
+  final bool tail;
+  final bool pill;
+  final bool outlined;
+  final bool accentBorder;
+  final bool elevated;
+
+  const _BubbleProfile({
+    required this.radius,
+    required this.tailRadius,
+    required this.horizontalPadding,
+    required this.verticalPadding,
+    required this.horizontalGap,
+    required this.verticalGap,
+    required this.tail,
+    required this.pill,
+    required this.outlined,
+    required this.accentBorder,
+    required this.elevated,
+  });
+
+  factory _BubbleProfile.fromStyle(String style, ThemeConfig theme) {
+    final index = VisualPreferences.bubbleStyles.indexOf(style).clamp(0, 19);
+    return _BubbleProfile(
+      radius: switch (index) {
+        2 || 5 || 11 => 8,
+        3 => 28,
+        4 || 13 => 22,
+        9 => 12,
+        10 => 6,
+        _ => theme.cornerRadius,
+      },
+      tailRadius: <int>{1, 9}.contains(index) ? 2 : 5,
+      horizontalPadding: <int>{2, 11}.contains(index)
+          ? 9
+          : (<int>{12, 13}.contains(index) ? 15 : 12),
+      verticalPadding: <int>{2, 11}.contains(index)
+          ? 6
+          : (<int>{13}.contains(index) ? 11 : 8),
+      horizontalGap: <int>{12, 13}.contains(index) ? 16 : 12,
+      verticalGap: <int>{2, 11}.contains(index) ? 2 : 3,
+      tail: <int>{0, 1, 9}.contains(index),
+      pill: index == 3,
+      outlined: <int>{6, 16}.contains(index),
+      accentBorder: index == 16,
+      elevated: <int>{7, 14, 18}.contains(index),
     );
   }
 }
