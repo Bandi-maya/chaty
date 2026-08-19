@@ -5,6 +5,7 @@ import '../../data/repositories/mock_data_store.dart';
 import '../../domain/models/chat_task.dart';
 import '../../domain/models/conversation.dart';
 import '../../domain/models/user_profile.dart';
+import 'task_workflow_service.dart';
 
 class TaskCreateEditModal extends StatefulWidget {
   final ThemeConfig theme;
@@ -31,6 +32,8 @@ class TaskCreateEditModal extends StatefulWidget {
 class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _descCtrl;
+  late final TaskWorkflowService _workflow;
+  late final ChatTask? _editingTask;
   late List<String> _selectedAssigneeIds;
   late TaskPriority _priority;
   late DateTime _dueDate;
@@ -40,13 +43,16 @@ class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
   @override
   void initState() {
     super.initState();
-    final task = widget.existingTask;
-    _titleCtrl = TextEditingController(
-      text: task?.title ?? widget.initialTitle ?? '',
-    );
+    _workflow = TaskWorkflowService(widget.dataStore);
+    _editingTask = widget.existingTask ??
+        _workflow.inferTaskFromMessage(
+          conversationId: widget.sourceConversationId,
+          messageId: widget.sourceMessageId,
+        );
+    final task = _editingTask;
+    _titleCtrl = TextEditingController(text: task?.title ?? widget.initialTitle ?? '');
     _descCtrl = TextEditingController(text: task?.description ?? '');
-    _selectedAssigneeIds =
-        task?.assigneeIds.toList() ?? <String>[widget.dataStore.currentUser.id];
+    _selectedAssigneeIds = task?.assigneeIds.toList() ?? <String>[widget.dataStore.currentUser.id];
     _priority = task?.priority ?? TaskPriority.medium;
     _dueDate = task?.dueAt ?? DateTime.now().add(const Duration(days: 3));
   }
@@ -76,18 +82,18 @@ class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
     });
 
     try {
-      if (widget.existingTask != null) {
-        await widget.dataStore.updateTaskAsync(
-          taskId: widget.existingTask!.id,
+      final ChatTask savedTask;
+      if (_editingTask != null) {
+        savedTask = await _workflow.update(
+          existingTask: _editingTask!,
           title: title,
           description: _descCtrl.text.trim(),
           assigneeIds: _selectedAssigneeIds,
           priority: _priority,
           dueAt: _dueDate,
-          labels: widget.existingTask!.labels,
         );
       } else {
-        await widget.dataStore.createTaskAsync(
+        savedTask = await _workflow.create(
           sourceConversationId: widget.sourceConversationId,
           sourceMessageId: widget.sourceMessageId,
           title: title,
@@ -100,15 +106,16 @@ class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
       }
 
       if (!mounted) return;
-      Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.of(context).pop(savedTask);
+      messenger.showSnackBar(
         SnackBar(
           content: Text(
-            widget.existingTask == null
-                ? 'Task "$title" created and shared in chat.'
+            _editingTask == null
+                ? 'Task "$title" created and linked to this chat.'
                 : 'Task "$title" updated.',
           ),
-          backgroundColor: const Color(0xFF10B981),
+          backgroundColor: widget.theme.successColor,
         ),
       );
     } catch (error) {
@@ -121,11 +128,13 @@ class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
   }
 
   Future<void> _pickDueDate() async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final initial = _dueDate.isBefore(today) ? today : _dueDate;
     final selected = await showDatePicker(
       context: context,
-      initialDate: _dueDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 3650)),
+      initialDate: initial,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 3650)),
     );
     if (selected == null || !mounted) return;
     setState(() {
@@ -163,7 +172,8 @@ class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
         .toList();
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 16 + MediaQuery.viewInsetsOf(context).bottom),
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.92),
       decoration: BoxDecoration(
         color: theme.surfaceColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -187,42 +197,40 @@ class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
               ),
               const SizedBox(height: 14),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    widget.existingTask != null
-                        ? 'Edit Task'
-                        : 'Create Task (/task)',
-                    style: TextStyle(
-                      color: theme.primaryTextColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Text(
+                      _editingTask != null ? 'Edit task' : 'Create task',
+                      style: TextStyle(color: theme.primaryTextColor, fontSize: 18, fontWeight: FontWeight.w800),
                     ),
                   ),
                   IconButton(
+                    tooltip: 'Close',
                     icon: const Icon(Icons.close_rounded),
                     onPressed: _isSaving ? null : () => Navigator.pop(context),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              if (_editingTask == null) ...[
+                Text(
+                  'Create an action item for this conversation. You can also type /task followed by a title.',
+                  style: TextStyle(color: theme.secondaryTextColor, fontSize: 12.5, height: 1.4),
+                ),
+                const SizedBox(height: 12),
+              ],
               TextField(
                 controller: _titleCtrl,
                 enabled: !_isSaving,
                 maxLength: 140,
-                style: TextStyle(
-                  color: theme.primaryTextColor,
-                  fontSize: 14.5,
-                ),
+                textInputAction: TextInputAction.next,
+                style: TextStyle(color: theme.primaryTextColor, fontSize: 14.5),
                 decoration: InputDecoration(
-                  labelText: 'Task Title',
+                  labelText: 'Task title',
                   counterText: '',
                   labelStyle: TextStyle(color: theme.secondaryTextColor),
                   filled: true,
                   fillColor: theme.cardColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(theme.cornerRadius),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(theme.cornerRadius)),
                 ),
               ),
               const SizedBox(height: 14),
@@ -231,28 +239,23 @@ class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
                 enabled: !_isSaving,
                 maxLines: 3,
                 maxLength: 2000,
-                style: TextStyle(
-                  color: theme.primaryTextColor,
-                  fontSize: 13.5,
-                ),
+                style: TextStyle(color: theme.primaryTextColor, fontSize: 13.5),
                 decoration: InputDecoration(
-                  labelText: 'Description / Instructions',
+                  labelText: 'Description / instructions',
                   labelStyle: TextStyle(color: theme.secondaryTextColor),
                   filled: true,
                   fillColor: theme.cardColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(theme.cornerRadius),
-                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(theme.cornerRadius)),
                 ),
               ),
               const SizedBox(height: 16),
+              Text('Assign to', style: TextStyle(color: theme.primaryTextColor, fontSize: 13, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 5),
               Text(
-                'Assign To Participants',
-                style: TextStyle(
-                  color: theme.primaryTextColor,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
+                conv.type == ConversationType.group
+                    ? 'Choose yourself or any participant in this group.'
+                    : 'Choose yourself or the other participant.',
+                style: TextStyle(color: theme.secondaryTextColor, fontSize: 11.5),
               ),
               const SizedBox(height: 8),
               Wrap(
@@ -260,65 +263,34 @@ class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
                 runSpacing: 8,
                 children: [
                   FilterChip(
-                    label: Text(
-                      'You (${currentUser.displayName.split(' ').first})',
-                    ),
+                    label: Text('You (${currentUser.displayName.split(' ').first})'),
                     selected: _selectedAssigneeIds.contains(currentUser.id),
                     selectedColor: theme.accentColor.withValues(alpha: 0.25),
-                    onSelected: _isSaving
-                        ? null
-                        : (selected) => _setAssignee(
-                              currentUser.id,
-                              selected,
-                            ),
+                    onSelected: _isSaving ? null : (selected) => _setAssignee(currentUser.id, selected),
                   ),
                   ...candidateAssignees.map((candidate) {
                     final selected = _selectedAssigneeIds.contains(candidate.id);
                     return FilterChip(
                       label: Text(candidate.displayName.split(' ').first),
                       selected: selected,
-                      selectedColor:
-                          theme.accentColor.withValues(alpha: 0.25),
-                      onSelected: _isSaving
-                          ? null
-                          : (value) => _setAssignee(candidate.id, value),
+                      selectedColor: theme.accentColor.withValues(alpha: 0.25),
+                      onSelected: _isSaving ? null : (value) => _setAssignee(candidate.id, value),
                     );
                   }),
                 ],
               ),
               const SizedBox(height: 16),
-              Text(
-                'Priority',
-                style: TextStyle(
-                  color: theme.primaryTextColor,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text('Priority', style: TextStyle(color: theme.primaryTextColor, fontSize: 13, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               SegmentedButton<TaskPriority>(
                 segments: const <ButtonSegment<TaskPriority>>[
-                  ButtonSegment<TaskPriority>(
-                    value: TaskPriority.low,
-                    label: Text('Low'),
-                  ),
-                  ButtonSegment<TaskPriority>(
-                    value: TaskPriority.medium,
-                    label: Text('Med'),
-                  ),
-                  ButtonSegment<TaskPriority>(
-                    value: TaskPriority.high,
-                    label: Text('High'),
-                  ),
-                  ButtonSegment<TaskPriority>(
-                    value: TaskPriority.urgent,
-                    label: Text('Urgent'),
-                  ),
+                  ButtonSegment<TaskPriority>(value: TaskPriority.low, label: Text('Low')),
+                  ButtonSegment<TaskPriority>(value: TaskPriority.medium, label: Text('Med')),
+                  ButtonSegment<TaskPriority>(value: TaskPriority.high, label: Text('High')),
+                  ButtonSegment<TaskPriority>(value: TaskPriority.urgent, label: Text('Urgent')),
                 ],
                 selected: <TaskPriority>{_priority},
-                onSelectionChanged: _isSaving
-                    ? null
-                    : (value) => setState(() => _priority = value.first),
+                onSelectionChanged: _isSaving ? null : (value) => setState(() => _priority = value.first),
               ),
               const SizedBox(height: 16),
               OutlinedButton.icon(
@@ -331,38 +303,39 @@ class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
               ),
               if (_errorMessage != null) ...[
                 const SizedBox(height: 14),
-                Text(
-                  _errorMessage!,
-                  style: TextStyle(
-                    color: theme.dangerColor,
-                    fontSize: 13,
+                Semantics(
+                  liveRegion: true,
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: theme.dangerColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(_errorMessage!, style: TextStyle(color: theme.dangerColor, fontSize: 13)),
                   ),
                 ),
               ],
               const SizedBox(height: 20),
-              ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
                   backgroundColor: theme.accentColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(theme.cornerRadius),
-                  ),
+                  foregroundColor: theme.onAccentColor,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(theme.cornerRadius)),
                 ),
                 onPressed: _isSaving ? null : _saveTask,
                 icon: _isSaving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: theme.onAccentColor),
                       )
-                    : const Icon(Icons.check_rounded, size: 18),
+                    : Icon(_editingTask == null ? Icons.add_task_rounded : Icons.save_rounded, size: 19),
                 label: Text(
-                  _isSaving ? 'Saving…' : 'Save and Share in Chat',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  _isSaving
+                      ? (_editingTask == null ? 'Creating…' : 'Saving…')
+                      : (_editingTask == null ? 'Create and link to chat' : 'Save changes'),
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
             ],
@@ -375,9 +348,7 @@ class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
   void _setAssignee(String userId, bool selected) {
     setState(() {
       if (selected) {
-        if (!_selectedAssigneeIds.contains(userId)) {
-          _selectedAssigneeIds.add(userId);
-        }
+        if (!_selectedAssigneeIds.contains(userId)) _selectedAssigneeIds.add(userId);
       } else {
         _selectedAssigneeIds.remove(userId);
       }
