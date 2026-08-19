@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
 import '../../../ui/core/theme/theme_controller.dart';
 import '../../data/repositories/mock_data_store.dart';
-import '../../ui/core/controllers/chaty_preferences_controller.dart';
 import '../../data/services/chaty_notification_service.dart';
-import 'chats_home_screen.dart';
-import '../tasks/tasks_screen.dart';
-import '../calls/calls_screen.dart';
-import '../updates/updates_screen.dart';
+import '../../domain/models/visual_preferences.dart';
 import '../../features/settings/settings_screen.dart';
-import 'package:chat/injection/locator.dart';
+import '../../injection/locator.dart';
+import '../../ui/core/controllers/chaty_preferences_controller.dart';
+import '../calls/calls_screen.dart';
+import '../tasks/tasks_screen.dart';
+import '../updates/updates_screen.dart';
+import 'chats_home_screen.dart';
 
 class MainNavigationShell extends StatefulWidget {
   const MainNavigationShell({super.key});
@@ -19,8 +22,9 @@ class MainNavigationShell extends StatefulWidget {
 
 class _MainNavigationShellState extends State<MainNavigationShell> {
   int _currentIndex = 0;
+  DateTime? _lastBackPressedAt;
 
-  final List<_NavDestinationItem> _navItems = const [
+  static const List<_NavDestinationItem> _navItems = <_NavDestinationItem>[
     _NavDestinationItem(
       label: 'Chats',
       icon: Icons.chat_bubble_outline_rounded,
@@ -28,12 +32,12 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     ),
     _NavDestinationItem(
       label: 'Updates',
-      icon: Icons.update_rounded,
+      icon: Icons.update_outlined,
       activeIcon: Icons.update_rounded,
     ),
     _NavDestinationItem(
       label: 'Tasks',
-      icon: Icons.checklist_rtl_rounded,
+      icon: Icons.checklist_rtl_outlined,
       activeIcon: Icons.checklist_rounded,
     ),
     _NavDestinationItem(
@@ -48,6 +52,36 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     ),
   ];
 
+  Future<void> _handleRootBack() async {
+    if (_currentIndex != 0) {
+      setState(() => _currentIndex = 0);
+      return;
+    }
+
+    final now = DateTime.now();
+    final previous = _lastBackPressedAt;
+    if (previous == null || now.difference(previous) > const Duration(seconds: 2)) {
+      _lastBackPressedAt = now;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Tap back again to exit Chaty'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      return;
+    }
+
+    await SystemNavigator.pop();
+  }
+
+  void _select(int index) {
+    if (index == _currentIndex) return;
+    setState(() => _currentIndex = index);
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeController = locator<ThemeController>();
@@ -56,11 +90,15 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     final notificationService = locator<ChatyNotificationService>();
 
     return ListenableBuilder(
-      listenable: themeController,
+      listenable: Listenable.merge(<Listenable>[
+        themeController,
+        preferencesController,
+        dataStore,
+      ]),
       builder: (context, _) {
         final theme = themeController.globalTheme;
-
-        final screens = [
+        final visual = preferencesController.visual;
+        final screens = <Widget>[
           ChatsHomeScreen(
             theme: theme,
             dataStore: dataStore,
@@ -83,131 +121,271 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
           ),
         ];
 
-        return Scaffold(
-          extendBody: true,
-          backgroundColor: theme.backgroundColor,
-          body: IndexedStack(
-            index: _currentIndex,
-            children: screens,
-          ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-          child: Container(
-            height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0B0E14), // Deep obsidian background matching image
-              borderRadius: BorderRadius.circular(36),
-              border: Border.all(
-                color: const Color(0xFF1E293B),
-                width: 1.2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  blurRadius: 24,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: List.generate(_navItems.length, (index) {
-                final item = _navItems[index];
-                final isSelected = _currentIndex == index;
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, result) {
+            if (!didPop) _handleRootBack();
+          },
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 840;
+              final compact = constraints.maxWidth < 390;
+              final body = IndexedStack(index: _currentIndex, children: screens);
 
-                return _buildNavItem(
-                  item: item,
-                  isSelected: isSelected,
-                  onTap: () => setState(() => _currentIndex = index),
+              if (wide) {
+                return Scaffold(
+                  backgroundColor: theme.backgroundColor,
+                  body: SafeArea(
+                    child: Row(
+                      children: <Widget>[
+                        _buildRail(theme, visual),
+                        VerticalDivider(
+                          width: 1,
+                          thickness: 1,
+                          color: theme.secondaryTextColor.withValues(alpha: 0.12),
+                        ),
+                        Expanded(child: body),
+                      ],
+                    ),
+                  ),
                 );
-              }),
+              }
+
+              return Scaffold(
+                backgroundColor: theme.backgroundColor,
+                body: body,
+                bottomNavigationBar: _buildBottomBar(
+                  theme,
+                  visual,
+                  compact: compact,
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildRail(dynamic theme, VisualPreferences visual) {
+    return NavigationRail(
+      backgroundColor: theme.surfaceColor,
+      selectedIndex: _currentIndex,
+      onDestinationSelected: _select,
+      extended: visual.bottomBarStyle == 'Workspace',
+      labelType: visual.bottomBarStyle == 'Workspace'
+          ? NavigationRailLabelType.none
+          : NavigationRailLabelType.selected,
+      indicatorColor: theme.accentColor.withValues(alpha: 0.16),
+      selectedIconTheme: IconThemeData(color: theme.accentColor),
+      unselectedIconTheme: IconThemeData(color: theme.secondaryTextColor),
+      selectedLabelTextStyle: TextStyle(
+        color: theme.primaryTextColor,
+        fontWeight: FontWeight.w700,
+      ),
+      unselectedLabelTextStyle: TextStyle(color: theme.secondaryTextColor),
+      destinations: _navItems
+          .map(
+            (item) => NavigationRailDestination(
+              icon: Icon(item.icon),
+              selectedIcon: Icon(item.activeIcon),
+              label: Text(item.label),
             ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildBottomBar(
+    dynamic theme,
+    VisualPreferences visual, {
+    required bool compact,
+  }) {
+    final profile = _BottomBarProfile.fromStyle(visual.bottomBarStyle);
+    final showLabels = !compact && profile.showLabels;
+    final horizontalPadding = compact ? 8.0 : profile.horizontalInset;
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          horizontalPadding,
+          0,
+          horizontalPadding,
+          profile.floating ? 10 : 0,
+        ),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          constraints: const BoxConstraints(minHeight: 58),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 2 : 6,
+            vertical: profile.dense ? 3 : 6,
+          ),
+          decoration: BoxDecoration(
+            color: profile.transparent
+                ? theme.backgroundColor
+                : theme.surfaceColor,
+            borderRadius: BorderRadius.circular(
+              profile.floating ? profile.radius : 0,
+            ),
+            border: profile.outlined
+                ? Border.all(
+                    color: theme.secondaryTextColor.withValues(alpha: 0.18),
+                  )
+                : null,
+            boxShadow: profile.elevated
+                ? <BoxShadow>[
+                    BoxShadow(
+                      color: Colors.black.withValues(
+                        alpha: theme.brightness == Brightness.dark ? 0.28 : 0.10,
+                      ),
+                      blurRadius: 22,
+                      offset: const Offset(0, 7),
+                    ),
+                  ]
+                : const <BoxShadow>[],
+          ),
+          child: Row(
+            children: List<Widget>.generate(_navItems.length, (index) {
+              final item = _navItems[index];
+              final selected = index == _currentIndex;
+              return Expanded(
+                child: Semantics(
+                  button: true,
+                  selected: selected,
+                  label: item.label,
+                  child: InkWell(
+                    onTap: () => _select(index),
+                    borderRadius: BorderRadius.circular(profile.itemRadius),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: showLabels ? 6 : 2,
+                        vertical: profile.dense ? 7 : 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected && profile.selectedFill
+                            ? theme.accentColor.withValues(alpha: 0.15)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(profile.itemRadius),
+                        border: selected && profile.itemOutline
+                            ? Border.all(
+                                color: theme.accentColor.withValues(alpha: 0.4),
+                              )
+                            : null,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          AnimatedScale(
+                            scale: selected ? profile.selectedScale : 1,
+                            duration: const Duration(milliseconds: 180),
+                            child: Icon(
+                              selected ? item.activeIcon : item.icon,
+                              size: compact ? 20 : profile.iconSize,
+                              color: selected
+                                  ? theme.accentColor
+                                  : theme.secondaryTextColor,
+                            ),
+                          ),
+                          if (showLabels) ...<Widget>[
+                            const SizedBox(height: 2),
+                            Text(
+                              item.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: selected
+                                    ? theme.primaryTextColor
+                                    : theme.secondaryTextColor,
+                                fontSize: profile.labelSize,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                          if (selected && profile.indicator) ...<Widget>[
+                            const SizedBox(height: 3),
+                            Container(
+                              width: 18,
+                              height: 2,
+                              decoration: BoxDecoration(
+                                color: theme.accentColor,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
           ),
         ),
       ),
     );
-  },
-);
   }
+}
 
-  Widget _buildNavItem({
-    required _NavDestinationItem item,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    if (isSelected) {
-      // Active item: Expanded rounded pill with vibrant circular badge & bold white label
-      return GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-          height: 52,
-          padding: const EdgeInsets.only(left: 6, right: 16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E2633), // Soft dark-blue slate background
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: const Color(0xFF334155),
-              width: 0.8,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Vibrant circular badge (Mint / Emerald / Turquoise) matching image
-              Container(
-                width: 38,
-                height: 38,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Color(0xFF2DD4BF), // Bright mint turquoise as shown in image
-                ),
-                child: Icon(
-                  item.activeIcon,
-                  size: 20,
-                  color: const Color(0xFF0F172A), // Dark contrast icon inside badge
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                item.label,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.2,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+class _BottomBarProfile {
+  final bool floating;
+  final bool outlined;
+  final bool elevated;
+  final bool transparent;
+  final bool dense;
+  final bool showLabels;
+  final bool selectedFill;
+  final bool itemOutline;
+  final bool indicator;
+  final double radius;
+  final double itemRadius;
+  final double iconSize;
+  final double selectedScale;
+  final double labelSize;
+  final double horizontalInset;
 
-    // Inactive item: Clean circular dark button with minimalist icon
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 48,
-        height: 48,
-        decoration: const BoxDecoration(
-          shape: BoxShape.circle,
-          color: Color(0xFF141922), // Subtle circular background
-        ),
-        child: Center(
-          child: Icon(
-            item.icon,
-            size: 21,
-            color: const Color(0xFF94A3B8), // Muted slate gray
-          ),
-        ),
-      ),
+  const _BottomBarProfile({
+    required this.floating,
+    required this.outlined,
+    required this.elevated,
+    required this.transparent,
+    required this.dense,
+    required this.showLabels,
+    required this.selectedFill,
+    required this.itemOutline,
+    required this.indicator,
+    required this.radius,
+    required this.itemRadius,
+    required this.iconSize,
+    required this.selectedScale,
+    required this.labelSize,
+    required this.horizontalInset,
+  });
+
+  factory _BottomBarProfile.fromStyle(String style) {
+    final index = VisualPreferences.bottomBarStyles.indexOf(style).clamp(0, 19);
+    return _BottomBarProfile(
+      floating: <int>{0, 6, 7, 8, 9, 14, 15, 18, 19}.contains(index),
+      outlined: <int>{5, 8, 11, 15, 18}.contains(index),
+      elevated: <int>{0, 6, 7, 9, 14, 15, 18, 19}.contains(index),
+      transparent: <int>{2, 10, 16}.contains(index),
+      dense: <int>{2, 3, 4, 17}.contains(index),
+      showLabels: !<int>{2, 4, 10}.contains(index),
+      selectedFill: !<int>{2, 10, 11, 16}.contains(index),
+      itemOutline: <int>{5, 8, 18}.contains(index),
+      indicator: <int>{10, 11, 16, 19}.contains(index),
+      radius: <int>{0, 6, 8, 9, 14, 15}.contains(index) ? 30 : 18,
+      itemRadius: <int>{0, 8, 9, 14}.contains(index) ? 22 : 14,
+      iconSize: index == 3 ? 20 : (index == 9 ? 24 : 22),
+      selectedScale: <int>{7, 9, 19}.contains(index) ? 1.12 : 1.04,
+      labelSize: index == 17 ? 10.0 : 11.0,
+      horizontalInset: <int>{14, 15}.contains(index) ? 22 : 12,
     );
   }
 }
