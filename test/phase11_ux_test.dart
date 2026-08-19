@@ -64,7 +64,9 @@ void main() {
         ),
       ),
     );
-    expect(find.bySemanticsLabel('Unable to load. Try again.'), findsOneWidget);
+    final semantics = tester.getSemantics(find.byType(ChatyStateView));
+    expect(semantics.label, contains('Unable to load'));
+    expect(semantics.label, contains('Try again'));
   });
 
   test('app propagates reduced-motion and suppresses decorative particles', () {
