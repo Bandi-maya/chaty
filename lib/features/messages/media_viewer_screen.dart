@@ -3,7 +3,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/services/chat_media_service.dart';
-import '../../../ui/core/theme/theme_config.dart';
+import '../../ui/core/theme/theme_config.dart';
 
 class MediaViewerScreen extends StatefulWidget {
   final ThemeConfig theme;
