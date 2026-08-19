@@ -85,7 +85,7 @@ class _TaskCreateEditModalState extends State<TaskCreateEditModal> {
       final ChatTask savedTask;
       if (_editingTask != null) {
         savedTask = await _workflow.update(
-          existingTask: _editingTask!,
+          existingTask: _editingTask,
           title: title,
           description: _descCtrl.text.trim(),
           assigneeIds: _selectedAssigneeIds,
