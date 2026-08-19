@@ -1,9 +1,14 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../../data/services/chaty_call_service.dart';
+import '../../injection/locator.dart';
+import '../../ui/core/controllers/chaty_preferences_controller.dart';
+import '../../ui/core/gb/gb_theme_overrides.dart';
 import '../../ui/core/theme/theme_config.dart';
 
 class ChatyCallScreen extends StatefulWidget {
@@ -31,19 +36,47 @@ class ChatyCallScreen extends StatefulWidget {
 }
 
 class _ChatyCallScreenState extends State<ChatyCallScreen> {
+  static const MethodChannel _windowChannel = MethodChannel('chaty/window');
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   final RTCVideoRenderer _remoteRenderer = RTCVideoRenderer();
   Timer? _durationTimer;
   int _connectedSeconds = 0;
   bool _initializing = true;
   bool _controlsVisible = true;
+  bool _pipSupported = false;
   String? _error;
+
+  ThemeConfig get _theme => GbThemeOverrides.resolveCalls(
+        widget.theme,
+        locator<ChatyPreferencesController>(),
+      );
 
   @override
   void initState() {
     super.initState();
     widget.callService.addListener(_onCallChanged);
     unawaited(_initialize());
+    unawaited(_detectPictureInPicture());
+  }
+
+  Future<void> _detectPictureInPicture() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final supported = await _windowChannel.invokeMethod<bool>('isPictureInPictureSupported') ?? false;
+      if (mounted) setState(() => _pipSupported = supported);
+    } on PlatformException {
+      if (mounted) setState(() => _pipSupported = false);
+    }
+  }
+
+  Future<void> _enterPictureInPicture() async {
+    if (!widget.isVideo || !_pipSupported) return;
+    try {
+      await _windowChannel.invokeMethod<bool>('enterPictureInPicture', const <String, int>{'width': 16, 'height': 9});
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Mini player unavailable: ${error.message ?? 'Android rejected Picture-in-Picture.'}')));
+    }
   }
 
   Future<void> _initialize() async {
@@ -132,7 +165,7 @@ class _ChatyCallScreenState extends State<ChatyCallScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = widget.theme;
+    final theme = _theme;
     final isVideo = widget.isVideo;
     final remoteReady = widget.callService.remoteStream != null;
 
@@ -173,7 +206,7 @@ class _ChatyCallScreenState extends State<ChatyCallScreen> {
                     if (isVideo && widget.callService.localStream != null && widget.callService.cameraEnabled)
                       Positioned(
                         right: 14,
-                        top: 14,
+                        top: 72,
                         width: compact ? 96 : 126,
                         height: compact ? 138 : 178,
                         child: ClipRRect(
@@ -200,6 +233,14 @@ class _ChatyCallScreenState extends State<ChatyCallScreen> {
                                 onPressed: _end,
                                 icon: const Icon(Icons.keyboard_arrow_down_rounded),
                               ),
+                              if (isVideo && _pipSupported) ...[
+                                const SizedBox(width: 8),
+                                IconButton.filledTonal(
+                                  tooltip: 'Open video in mini player',
+                                  onPressed: _enterPictureInPicture,
+                                  icon: const Icon(Icons.picture_in_picture_alt_rounded),
+                                ),
+                              ],
                               const Spacer(),
                               Flexible(
                                 child: Column(
