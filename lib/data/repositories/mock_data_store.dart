@@ -15,13 +15,13 @@ import '../services/gb_feature_backend_service.dart';
 
 /// Compatibility adapter used by the existing presentation layer.
 ///
-/// The historical class name is kept so every existing screen/option can stay
-/// intact, but its data now comes from [ChatyBackendService] and Supabase rather
-/// than seeded/demo records.
+/// The historical class name is kept so existing screen contracts remain
+/// stable. Runtime data is sourced from [ChatyBackendService] and Supabase.
 class MockDataStore extends ChangeNotifier {
   final ChatyBackendService _backend = ChatyBackendService();
   final GbFeatureBackendService _gbBackend = GbFeatureBackendService();
   final Map<String, Map<String, DateTime>> _typingByConversation = <String, Map<String, DateTime>>{};
+  final Map<String, List<ChatMessage>> _optimisticMessages = <String, List<ChatMessage>>{};
   StreamSubscription<List<Map<String, dynamic>>>? _typingSubscription;
   StreamSubscription<AuthState>? _authSubscription;
   Timer? _typingExpiryTimer;
@@ -31,6 +31,7 @@ class MockDataStore extends ChangeNotifier {
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((state) {
       if (state.session == null) {
         _typingByConversation.clear();
+        _optimisticMessages.clear();
         unawaited(_typingSubscription?.cancel());
         _typingSubscription = null;
         notifyListeners();
@@ -123,7 +124,14 @@ class MockDataStore extends ChangeNotifier {
   UserProfile? getUserById(String userId) => getUser(userId);
   UserProfile? getContact(String userId) => getUser(userId);
 
-  List<ChatMessage> getMessages(String conversationId) => _backend.getMessages(conversationId);
+  List<ChatMessage> getMessages(String conversationId) {
+    final server = _backend.getMessages(conversationId);
+    final pending = _optimisticMessages[conversationId] ?? const <ChatMessage>[];
+    if (pending.isEmpty) return server;
+    final combined = <ChatMessage>[...server, ...pending]
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return List<ChatMessage>.unmodifiable(combined);
+  }
 
   Future<void> ensureConversationLoaded(String conversationId) => _backend.ensureConversationLoaded(conversationId);
 
@@ -168,16 +176,50 @@ class MockDataStore extends ChangeNotifier {
     String? replyToSenderName,
     String? linkedTaskId,
   }) async {
-    await _backend.sendMessage(
+    final normalizedText = text.trim();
+    final optimisticId = 'local_${DateTime.now().microsecondsSinceEpoch}';
+    final optimistic = ChatMessage(
+      id: optimisticId,
       conversationId: conversationId,
-      text: text,
+      senderId: currentUser.id,
       type: type,
+      text: normalizedText,
       attachment: attachment,
       replyToMessageId: replyToMessageId,
       replyToPreviewText: replyToPreviewText,
       replyToSenderName: replyToSenderName,
       linkedTaskId: linkedTaskId,
+      createdAt: DateTime.now(),
+      deliveryState: DeliveryState.sending,
     );
+
+    (_optimisticMessages[conversationId] ??= <ChatMessage>[]).add(optimistic);
+    notifyListeners();
+
+    try {
+      await _backend.sendMessage(
+        conversationId: conversationId,
+        text: normalizedText,
+        type: type,
+        attachment: attachment,
+        replyToMessageId: replyToMessageId,
+        replyToPreviewText: replyToPreviewText,
+        replyToSenderName: replyToSenderName,
+        linkedTaskId: linkedTaskId,
+      );
+      _optimisticMessages[conversationId]?.removeWhere((message) => message.id == optimisticId);
+      if (_optimisticMessages[conversationId]?.isEmpty ?? false) {
+        _optimisticMessages.remove(conversationId);
+      }
+      notifyListeners();
+    } catch (_) {
+      _optimisticMessages[conversationId]?.removeWhere((message) => message.id == optimisticId);
+      if (_optimisticMessages[conversationId]?.isEmpty ?? false) {
+        _optimisticMessages.remove(conversationId);
+      }
+      notifyListeners();
+      rethrow;
+    }
   }
 
   void toggleReaction(String conversationId, String messageId, String emoji) => _backend.toggleReaction(conversationId, messageId, emoji);
@@ -204,12 +246,16 @@ class MockDataStore extends ChangeNotifier {
 
   void togglePinMessage(String conversationId, String messageId) {
     final message = getMessages(conversationId).where((item) => item.id == messageId).firstOrNull;
-    if (message != null) _backend.setMessageState(conversationId, messageId, 'pinned', !message.isPinned);
+    if (message != null && !message.id.startsWith('local_')) {
+      _backend.setMessageState(conversationId, messageId, 'pinned', !message.isPinned);
+    }
   }
 
   void toggleStarMessage(String conversationId, String messageId) {
     final message = getMessages(conversationId).where((item) => item.id == messageId).firstOrNull;
-    if (message != null) _backend.setMessageState(conversationId, messageId, 'starred', !message.isStarred);
+    if (message != null && !message.id.startsWith('local_')) {
+      _backend.setMessageState(conversationId, messageId, 'starred', !message.isStarred);
+    }
   }
 
   void setDraft(String conversationId, String draft) => _backend.setDraft(conversationId, draft);
