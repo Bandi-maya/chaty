@@ -7,7 +7,13 @@ import '../../../ui/core/gb/gb_settings_taxonomy.dart';
 
 class GbSettingsHubScreen extends StatefulWidget {
   final ChatyPreferencesController preferencesController;
-  const GbSettingsHubScreen({super.key, required this.preferencesController});
+  final String? initialSection;
+
+  const GbSettingsHubScreen({
+    super.key,
+    required this.preferencesController,
+    this.initialSection,
+  });
 
   @override
   State<GbSettingsHubScreen> createState() => _GbSettingsHubScreenState();
@@ -25,18 +31,28 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final section = widget.initialSection;
+    if (section != null) {
+      return _SettingsSectionScreen(
+        section: section,
+        controller: widget.preferencesController,
+        onColor: _editColor,
+        onAction: _runAction,
+      );
+    }
+
     final bySection = GbSettingsTaxonomy.bySection();
     final searching = _query.trim().isNotEmpty;
     final matches = searching
-        ? GbFeatureCatalog.all.where((f) => GbSettingsTaxonomy.matches(f, _query)).toList(growable: false)
+        ? GbFeatureCatalog.all.where((feature) => GbSettingsTaxonomy.matches(feature, _query)).toList(growable: false)
         : const <GbFeatureDefinition>[];
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Advanced settings'),
+        title: const Text('All settings'),
         actions: [
           IconButton(
-            tooltip: 'Reset advanced settings',
+            tooltip: 'Reset customizable settings',
             onPressed: _confirmReset,
             icon: const Icon(Icons.restart_alt_rounded),
           ),
@@ -44,70 +60,90 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
       ),
       body: SafeArea(
         top: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-              child: TextField(
-                controller: _search,
-                onChanged: (value) => setState(() => _query = value),
-                decoration: InputDecoration(
-                  hintText: 'Search settings',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: searching
-                      ? IconButton(
-                          tooltip: 'Clear search',
-                          onPressed: () {
-                            _search.clear();
-                            setState(() => _query = '');
-                          },
-                          icon: const Icon(Icons.close_rounded),
-                        )
-                      : null,
-                  filled: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+                  child: TextField(
+                    controller: _search,
+                    onChanged: (value) => setState(() => _query = value),
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'Search settings',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      suffixIcon: searching
+                          ? IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: () {
+                                _search.clear();
+                                setState(() => _query = '');
+                              },
+                              icon: const Icon(Icons.close_rounded),
+                            )
+                          : null,
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            Expanded(
-              child: searching
-                  ? _SearchResults(
-                      results: matches,
-                      controller: widget.preferencesController,
-                      onColor: _editColor,
-                      onAction: _runAction,
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 28),
-                      itemCount: GbSettingsTaxonomy.sections.length,
-                      itemBuilder: (context, index) {
-                        final section = GbSettingsTaxonomy.sections[index];
-                        final count = bySection[section]?.length ?? 0;
-                        if (count == 0) return const SizedBox.shrink();
-                        return Card(
-                          elevation: 0,
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          child: ListTile(
-                            leading: CircleAvatar(child: Icon(_iconFor(section), size: 20)),
-                            title: Text(section, style: const TextStyle(fontWeight: FontWeight.w700)),
-                            subtitle: Text('$count settings'),
-                            trailing: const Icon(Icons.chevron_right_rounded),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => _GbSettingsSectionScreen(
-                                  section: section,
-                                  controller: widget.preferencesController,
-                                  onColor: _editColor,
-                                  onAction: _runAction,
+                Expanded(
+                  child: searching
+                      ? _SearchResults(
+                          results: matches,
+                          controller: widget.preferencesController,
+                          onColor: _editColor,
+                          onAction: _runAction,
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(12, 0, 12, 28),
+                          itemCount: GbSettingsTaxonomy.sections.length,
+                          itemBuilder: (context, index) {
+                            final item = GbSettingsTaxonomy.sections[index];
+                            final count = bySection[item]?.length ?? 0;
+                            if (count == 0) return const SizedBox.shrink();
+                            return Card(
+                              elevation: 0,
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              child: ListTile(
+                                minTileHeight: 58,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 3),
+                                leading: SizedBox(
+                                  width: 40,
+                                  height: 40,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(_iconFor(item), size: 20),
+                                  ),
+                                ),
+                                title: Text(item, style: const TextStyle(fontWeight: FontWeight.w700)),
+                                subtitle: Text('$count options'),
+                                trailing: const Icon(Icons.chevron_right_rounded),
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => GbSettingsHubScreen(
+                                      preferencesController: widget.preferencesController,
+                                      initialSection: item,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -115,22 +151,32 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
 
   IconData _iconFor(String section) {
     switch (section) {
-      case 'Privacy & security': return Icons.shield_outlined;
-      case 'Chats & messaging': return Icons.chat_bubble_outline_rounded;
-      case 'Appearance & home': return Icons.palette_outlined;
-      case 'Status & stories': return Icons.auto_stories_outlined;
-      case 'Calls': return Icons.call_outlined;
-      case 'Media & storage': return Icons.perm_media_outlined;
-      case 'Notifications & presence': return Icons.notifications_outlined;
-      case 'Navigation & gestures': return Icons.swipe_outlined;
-      case 'Automation & behavior': return Icons.bolt_outlined;
-      default: return Icons.tune_rounded;
+      case 'Privacy & security':
+        return Icons.shield_outlined;
+      case 'Chats & messaging':
+        return Icons.chat_bubble_outline_rounded;
+      case 'Appearance & home':
+        return Icons.palette_outlined;
+      case 'Status & stories':
+        return Icons.auto_stories_outlined;
+      case 'Calls':
+        return Icons.call_outlined;
+      case 'Media & storage':
+        return Icons.perm_media_outlined;
+      case 'Notifications & presence':
+        return Icons.notifications_outlined;
+      case 'Navigation & gestures':
+        return Icons.swipe_outlined;
+      case 'Automation & behavior':
+        return Icons.bolt_outlined;
+      default:
+        return Icons.tune_rounded;
     }
   }
 
   Future<void> _editColor(GbFeatureDefinition item) async {
     final current = widget.preferencesController.gbInt(item.key);
-    final controller = TextEditingController(
+    final input = TextEditingController(
       text: current == 0 ? '' : '#${current.toRadixString(16).padLeft(8, '0').toUpperCase()}',
     );
     final selected = await showDialog<int?>(
@@ -138,14 +184,15 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
       builder: (dialogContext) => AlertDialog(
         title: Text(item.title),
         content: TextField(
-          controller: controller,
+          controller: input,
+          textCapitalization: TextCapitalization.characters,
           decoration: const InputDecoration(labelText: 'ARGB hex', hintText: '#FF6366F1'),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
           FilledButton(
             onPressed: () {
-              var text = controller.text.trim().replaceFirst('#', '').replaceFirst('0x', '');
+              var text = input.text.trim().replaceFirst('#', '').replaceFirst('0x', '');
               if (text.length == 6) text = 'FF$text';
               Navigator.pop(dialogContext, int.tryParse(text, radix: 16));
             },
@@ -154,8 +201,8 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
         ],
       ),
     );
-    controller.dispose();
-    if (selected != null) widget.preferencesController.updateGbFeature(item.key, selected);
+    input.dispose();
+    if (selected != null) await widget.preferencesController.updateGbFeature(item.key, selected);
   }
 
   Future<void> _runAction(GbFeatureDefinition item) async {
@@ -169,6 +216,7 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
       await Supabase.instance.client.from('blocked_users').delete().eq('blocker_id', user.id);
       return;
     }
+
     final input = TextEditingController(text: widget.preferencesController.gbString(item.key));
     final result = await showDialog<String>(
       context: context,
@@ -182,15 +230,15 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
       ),
     );
     input.dispose();
-    if (result != null) widget.preferencesController.updateGbFeature(item.key, result);
+    if (result != null) await widget.preferencesController.updateGbFeature(item.key, result);
   }
 
   Future<void> _confirmReset() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset advanced settings?'),
-        content: const Text('This restores advanced settings to their defaults without deleting chats or account data.'),
+        title: const Text('Reset customizable settings?'),
+        content: const Text('This restores customization values to their defaults without deleting chats or account data.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Reset')),
@@ -201,13 +249,13 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
   }
 }
 
-class _GbSettingsSectionScreen extends StatelessWidget {
+class _SettingsSectionScreen extends StatelessWidget {
   final String section;
   final ChatyPreferencesController controller;
   final Future<void> Function(GbFeatureDefinition) onColor;
   final Future<void> Function(GbFeatureDefinition) onAction;
 
-  const _GbSettingsSectionScreen({
+  const _SettingsSectionScreen({
     required this.section,
     required this.controller,
     required this.onColor,
@@ -219,20 +267,38 @@ class _GbSettingsSectionScreen extends StatelessWidget {
     final groups = GbSettingsTaxonomy.bySubsection(section);
     return Scaffold(
       appBar: AppBar(title: Text(section)),
-      body: ListenableBuilder(
-        listenable: controller,
-        builder: (context, _) => ListView(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 28),
-          children: [
-            for (final entry in groups.entries) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(8, 14, 8, 6),
-                child: Text(entry.key.toUpperCase(), style: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w800)),
-              ),
-              for (final feature in entry.value)
-                _FeatureRow(feature: feature, controller: controller, onColor: onColor, onAction: onAction),
-            ],
-          ],
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: ListenableBuilder(
+            listenable: controller,
+            builder: (context, _) => ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 32),
+              children: [
+                for (final entry in groups.entries) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 16, 8, 6),
+                    child: Text(
+                      entry.key.toUpperCase(),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: .7,
+                          ),
+                    ),
+                  ),
+                  for (final feature in entry.value)
+                    _FeatureRow(
+                      feature: feature,
+                      controller: controller,
+                      onColor: onColor,
+                      onAction: onAction,
+                    ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -245,7 +311,12 @@ class _SearchResults extends StatelessWidget {
   final Future<void> Function(GbFeatureDefinition) onColor;
   final Future<void> Function(GbFeatureDefinition) onAction;
 
-  const _SearchResults({required this.results, required this.controller, required this.onColor, required this.onAction});
+  const _SearchResults({
+    required this.results,
+    required this.controller,
+    required this.onColor,
+    required this.onAction,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -285,6 +356,7 @@ class _FeatureRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final location = GbSettingsTaxonomy.locationFor(feature);
+    final currentTheme = Theme.of(context);
     Widget trailing;
     VoidCallback? tap;
 
@@ -296,12 +368,11 @@ class _FeatureRow extends StatelessWidget {
         );
         break;
       case GbFeatureKind.slider:
-        final value = controller.gbDouble(
-          feature.key,
-          fallback: (feature.defaultValue as num?)?.toDouble() ?? feature.min,
-        ).clamp(feature.min, feature.max);
+        final value = controller
+            .gbDouble(feature.key, fallback: (feature.defaultValue as num?)?.toDouble() ?? feature.min)
+            .clamp(feature.min, feature.max);
         trailing = SizedBox(
-          width: 136,
+          width: 124,
           child: Slider(
             min: feature.min,
             max: feature.max,
@@ -312,12 +383,38 @@ class _FeatureRow extends StatelessWidget {
         break;
       case GbFeatureKind.choice:
         final current = controller.gbString(feature.key, fallback: feature.defaultValue?.toString() ?? '');
-        trailing = Text(current, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w700));
+        trailing = ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 112),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  current,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: currentTheme.colorScheme.primary, fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(width: 2),
+              const Icon(Icons.chevron_right_rounded, size: 20),
+            ],
+          ),
+        );
         tap = () => _choose(context, current);
         break;
       case GbFeatureKind.color:
         final color = controller.gbColor(feature.key);
-        trailing = CircleAvatar(backgroundColor: color ?? Theme.of(context).colorScheme.surfaceContainerHighest, radius: 16, child: color == null ? const Icon(Icons.palette_outlined, size: 16) : null);
+        trailing = Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color ?? currentTheme.colorScheme.surfaceContainerHighest,
+            border: Border.all(color: currentTheme.dividerColor),
+          ),
+          child: color == null ? const Icon(Icons.palette_outlined, size: 16) : null,
+        );
         tap = () => onColor(feature);
         break;
       case GbFeatureKind.action:
@@ -334,6 +431,7 @@ class _FeatureRow extends StatelessWidget {
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 3),
       child: ListTile(
+        minTileHeight: 62,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         title: Text(feature.title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(description, maxLines: showLocation ? 3 : 2, overflow: TextOverflow.ellipsis),
@@ -348,21 +446,28 @@ class _FeatureRow extends StatelessWidget {
     final selected = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            for (final option in feature.options)
-              RadioListTile<String>(
-                value: option,
-                groupValue: current,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .72),
+          child: ListView.builder(
+            shrinkWrap: true,
+            padding: const EdgeInsets.only(bottom: 12),
+            itemCount: feature.options.length,
+            itemBuilder: (context, index) {
+              final option = feature.options[index];
+              final selected = option == current;
+              return ListTile(
+                minTileHeight: 52,
                 title: Text(option),
-                onChanged: (value) => Navigator.pop(context, value),
-              ),
-          ],
+                trailing: selected ? Icon(Icons.check_circle_rounded, color: Theme.of(context).colorScheme.primary) : null,
+                onTap: () => Navigator.pop(context, option),
+              );
+            },
+          ),
         ),
       ),
     );
-    if (selected != null) controller.updateGbFeature(feature.key, selected);
+    if (selected != null) await controller.updateGbFeature(feature.key, selected);
   }
 }
