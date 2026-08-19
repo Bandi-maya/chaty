@@ -30,7 +30,7 @@ Future<void> main() async {
 
   await Supabase.initialize(
     url: _supabaseUrl,
-    anonKey: _supabasePublishableKey,
+    publishableKey: _supabasePublishableKey,
     debug: !kReleaseMode,
   );
 
