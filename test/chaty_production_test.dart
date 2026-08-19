@@ -2,8 +2,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chat/domain/models/conversation.dart';
 import 'package:chat/domain/models/user_profile.dart';
+import 'package:chat/domain/models/visual_preferences.dart';
 import 'package:chat/ui/core/commands/chat_command_parser.dart';
 import 'package:chat/ui/core/realtime/realtime_event_bus.dart';
+import 'package:chat/ui/core/theme/theme_presets.dart';
 import 'package:chat/ui/core/validators/chaty_validators.dart';
 
 void main() {
@@ -55,6 +57,54 @@ void main() {
       final regular = ChatCommandParser.parse('Hello /task inside sentence');
       expect(regular.isCommand, isFalse);
       expect(regular.type, ChatCommandType.unknown);
+    });
+  });
+
+  group('Production Appearance Contract Tests', () {
+    test('Theme catalogue exposes exactly 20 unique production presets', () {
+      expect(ThemePresets.all, hasLength(20));
+      expect(
+        ThemePresets.all.map((theme) => theme.id).toSet(),
+        hasLength(20),
+      );
+    });
+
+    test('Every visual customization category exposes 20 unique choices', () {
+      final categories = <List<String>>[
+        VisualPreferences.topBarStyles,
+        VisualPreferences.bottomBarStyles,
+        VisualPreferences.bubbleStyles,
+        VisualPreferences.appIconStyles,
+        VisualPreferences.notificationIconStyles,
+        VisualPreferences.typographyStyles,
+        VisualPreferences.animationStyles,
+      ];
+
+      for (final category in categories) {
+        expect(category, hasLength(20));
+        expect(category.toSet(), hasLength(20));
+      }
+    });
+
+    test('Visual preferences round-trip persisted selections', () {
+      final original = const VisualPreferences().copyWith(
+        topBarStyle: VisualPreferences.topBarStyles.last,
+        bottomBarStyle: VisualPreferences.bottomBarStyles[7],
+        bubbleStyle: VisualPreferences.bubbleStyles[12],
+        appIconStyle: VisualPreferences.appIconStyles[4],
+        notificationIconStyle: VisualPreferences.notificationIconStyles[8],
+        typographyStyle: VisualPreferences.typographyStyles[6],
+        entryAnimation: VisualPreferences.animationStyles[14],
+        exitAnimation: VisualPreferences.animationStyles[2],
+      );
+
+      final restored = VisualPreferences.fromMap(original.toMap());
+      expect(restored.topBarStyle, original.topBarStyle);
+      expect(restored.bottomBarStyle, original.bottomBarStyle);
+      expect(restored.bubbleStyle, original.bubbleStyle);
+      expect(restored.typographyStyle, original.typographyStyle);
+      expect(restored.entryAnimation, original.entryAnimation);
+      expect(restored.exitAnimation, original.exitAnimation);
     });
   });
 
