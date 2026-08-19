@@ -74,24 +74,38 @@ class _AppIconSettingsScreenState extends State<AppIconSettingsScreen> {
       final files = await FilePicker.pickFiles(type: FileType.image);
       if (!mounted || files.isEmpty) return;
       final selected = files.single;
+      final selectedPath = selected.path;
+      if (selectedPath == null || selectedPath.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This image is not accessible as a local file on this device.')),
+        );
+        return;
+      }
+
+      final source = File(selectedPath);
+      if (!await source.exists()) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('The selected image no longer exists.')));
+        return;
+      }
+
       const maxInputBytes = 25 * 1024 * 1024;
-      if (selected.size > maxInputBytes) {
+      final fileSize = await source.length();
+      if (fileSize > maxInputBytes) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Choose an image smaller than 25 MB.')),
         );
         return;
       }
-      Uint8List? bytes = selected.bytes;
-      if (bytes == null && selected.path != null) {
-        bytes = await File(selected.path!).readAsBytes();
-      }
-      if (bytes == null || bytes.lengthInBytes < 1024) {
+      if (fileSize < 1024) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Choose a valid image file.')));
         return;
       }
 
+      final bytes = await source.readAsBytes();
       final decoded = await decodeImageFromList(bytes);
       if (decoded.width < 128 || decoded.height < 128) {
         if (!mounted) return;
@@ -103,7 +117,7 @@ class _AppIconSettingsScreenState extends State<AppIconSettingsScreen> {
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => _CustomBrandIconEditor(
-            imageBytes: bytes!,
+            imageBytes: bytes,
             controller: widget.appIconController,
           ),
         ),
