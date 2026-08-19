@@ -8,6 +8,7 @@ import '../../ui/core/controllers/appearance_variant_controller.dart';
 import '../../ui/core/gb/gb_theme_overrides.dart';
 import '../../ui/core/layout/adaptive_window_metrics.dart';
 import '../../ui/core/navigation/premium_navigation_bar.dart';
+import '../../ui/core/navigation/premium_navigation_rail.dart';
 import '../../data/services/chaty_notification_service.dart';
 import 'chats_home_screen.dart';
 import '../tasks/tasks_screen.dart';
@@ -95,7 +96,7 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
               final metrics = AdaptiveWindowMetrics.fromSize(Size(constraints.maxWidth, constraints.maxHeight));
               final content = IndexedStack(index: _currentIndex, children: screens);
               if (metrics.useNavigationRail) {
-                return _buildRailShell(
+                return _buildWideShell(
                   theme: theme,
                   content: content,
                   appearance: appearanceController,
@@ -122,44 +123,49 @@ class _MainNavigationShellState extends State<MainNavigationShell> {
     );
   }
 
-  Widget _buildRailShell({
+  Widget _buildWideShell({
     required dynamic theme,
     required Widget content,
     required AppearanceVariantController appearance,
     required AdaptiveWindowMetrics metrics,
   }) {
-    final index = appearance.navigationIndex;
-    final compact = metrics.width < 720 || <int>{1, 2, 6, 7, 15, 19}.contains(index);
-    final showAllLabels = metrics.width >= 900 && <int>{0, 3, 4, 8, 9, 17, 18}.contains(index);
-    final indicatorRadius = <double>[18, 12, 8, 24, 10, 20, 8, 30, 14, 20, 16, 24, 12, 22, 14, 8, 24, 10, 16, 8][index];
+    final tabStyle = appearance.navigationIndex >= 10 && appearance.navigationIndex <= 16;
+    if (tabStyle) {
+      return Scaffold(
+        backgroundColor: theme.backgroundColor,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              Padding(
+                padding: EdgeInsets.only(top: appearance.navigationIndex == 15 ? 48 : 58),
+                child: content,
+              ),
+              PremiumNavigationRail(
+                styleIndex: appearance.navigationIndex,
+                selectedIndex: _currentIndex,
+                destinations: _navItems,
+                onSelected: (next) => setState(() => _currentIndex = next),
+                theme: theme,
+                metrics: metrics,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: theme.backgroundColor,
       body: SafeArea(
         child: Row(
           children: [
-            NavigationRail(
+            PremiumNavigationRail(
+              styleIndex: appearance.navigationIndex,
               selectedIndex: _currentIndex,
-              onDestinationSelected: (next) => setState(() => _currentIndex = next),
-              minWidth: compact ? 56 : 72,
-              minExtendedWidth: 190,
-              extended: showAllLabels,
-              groupAlignment: metrics.isShort ? 0 : (<int>{5, 16}.contains(index) ? 0 : -0.72),
-              backgroundColor: theme.surfaceColor,
-              indicatorColor: theme.accentColor.withValues(alpha: <int>{2, 7, 9, 19}.contains(index) ? 0.08 : 0.16),
-              indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(indicatorRadius)),
-              selectedIconTheme: IconThemeData(color: theme.accentColor, size: compact ? 20 : 23),
-              unselectedIconTheme: IconThemeData(color: theme.secondaryTextColor, size: compact ? 19 : 21),
-              selectedLabelTextStyle: TextStyle(color: theme.primaryTextColor, fontWeight: FontWeight.w700),
-              unselectedLabelTextStyle: TextStyle(color: theme.secondaryTextColor),
-              labelType: showAllLabels ? NavigationRailLabelType.none : NavigationRailLabelType.selected,
-              destinations: _navItems
-                  .map((item) => NavigationRailDestination(
-                        icon: Icon(item.icon),
-                        selectedIcon: Icon(item.activeIcon),
-                        label: Text(item.label),
-                      ))
-                  .toList(growable: false),
+              destinations: _navItems,
+              onSelected: (next) => setState(() => _currentIndex = next),
+              theme: theme,
+              metrics: metrics,
             ),
             VerticalDivider(width: 1, color: theme.cardColor),
             Expanded(child: content),
