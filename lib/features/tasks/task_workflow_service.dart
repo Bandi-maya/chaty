@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
+
 import '../../data/repositories/mock_data_store.dart';
 import '../../domain/models/chat_message.dart';
 import '../../domain/models/chat_task.dart';
@@ -9,8 +12,15 @@ import '../../domain/models/conversation.dart';
 /// actually reflected the requested change before UI success is reported.
 class TaskWorkflowService {
   final MockDataStore dataStore;
+  final SupabaseClient _client;
+  final Uuid _uuid;
 
-  const TaskWorkflowService(this.dataStore);
+  TaskWorkflowService(
+    this.dataStore, {
+    SupabaseClient? client,
+    Uuid uuid = const Uuid(),
+  })  : _client = client ?? Supabase.instance.client,
+        _uuid = uuid;
 
   ChatTask? inferTaskFromMessage({
     required String conversationId,
@@ -43,20 +53,28 @@ class TaskWorkflowService {
       assigneeIds: assigneeIds,
       dueAt: dueAt,
     );
+    final normalizedAssignees = List<String>.unmodifiable(assigneeIds.toSet());
+    final clientTaskId = _uuid.v4();
 
-    final task = await dataStore.createTaskAsync(
-      sourceConversationId: sourceConversationId,
-      sourceMessageId: sourceMessageId,
-      title: title.trim(),
-      description: description.trim(),
-      assigneeIds: List<String>.unmodifiable(assigneeIds.toSet()),
-      priority: priority,
-      dueAt: dueAt,
-      labels: labels,
-    );
+    final raw = await _client.rpc('create_chat_task', params: <String, dynamic>{
+      'p_conversation_id': sourceConversationId,
+      'p_client_task_id': clientTaskId,
+      'p_title': title.trim(),
+      'p_assignee_ids': normalizedAssignees,
+      'p_priority': _priorityToDatabase(priority),
+      'p_due_at': dueAt.toUtc().toIso8601String(),
+      'p_description': description.trim(),
+      'p_labels': labels,
+      'p_source_message_id': sourceMessageId,
+    });
+    final taskId = _extractTaskId(raw);
+    if (taskId.isEmpty) {
+      throw Exception('The server did not return a task identifier. Please try again.');
+    }
 
-    if (task.id.isEmpty || task.sourceConversationId != conversation.id) {
-      throw Exception('The server did not return a valid task. Please try again.');
+    final task = await _waitForTask(taskId, (candidate) => candidate.sourceConversationId == conversation.id);
+    if (task == null) {
+      throw Exception('Task creation could not be confirmed from the realtime task feed.');
     }
     if (sourceMessageId != null && task.sourceMessageId != sourceMessageId) {
       throw Exception('The task was created but the source message was not linked correctly.');
@@ -83,15 +101,15 @@ class TaskWorkflowService {
     );
 
     final normalizedAssignees = List<String>.unmodifiable(assigneeIds.toSet());
-    await dataStore.updateTaskAsync(
-      taskId: existingTask.id,
-      title: title.trim(),
-      description: description.trim(),
-      assigneeIds: normalizedAssignees,
-      priority: priority,
-      dueAt: dueAt,
-      labels: existingTask.labels,
-    );
+    await _client.rpc('update_chat_task', params: <String, dynamic>{
+      'p_task_id': existingTask.id,
+      'p_title': title.trim(),
+      'p_description': description.trim(),
+      'p_assignee_ids': normalizedAssignees,
+      'p_priority': _priorityToDatabase(priority),
+      'p_due_at': dueAt.toUtc().toIso8601String(),
+      'p_labels': existingTask.labels,
+    });
 
     final confirmed = await _waitForTask(
       existingTask.id,
@@ -99,11 +117,24 @@ class TaskWorkflowService {
           task.title == title.trim() &&
           task.description == description.trim() &&
           task.priority == priority &&
-          task.dueAt.toUtc().difference(dueAt.toUtc()).abs() < const Duration(seconds: 2) &&
+          task.dueAt.toUtc().difference(dueAt.toUtc()).inMilliseconds.abs() < 2000 &&
           _sameIds(task.assigneeIds, normalizedAssignees),
     );
     if (confirmed == null) {
       throw Exception('The server accepted the update, but Chaty could not confirm the refreshed task state.');
+    }
+    return confirmed;
+  }
+
+  Future<ChatTask> updateStatus(ChatTask existingTask, TaskStatus status) async {
+    if (existingTask.status == status) return existingTask;
+    await _client.rpc('update_task_status', params: <String, dynamic>{
+      'p_task_id': existingTask.id,
+      'p_status': _statusToDatabase(status),
+    });
+    final confirmed = await _waitForTask(existingTask.id, (task) => task.status == status);
+    if (confirmed == null) {
+      throw Exception('The task status change could not be confirmed.');
     }
     return confirmed;
   }
@@ -138,16 +169,16 @@ class TaskWorkflowService {
           .getMessages(sourceConversationId)
           .where((message) => message.id == sourceMessageId)
           .firstOrNull;
-      // A task-card tap passes its own message id. That is valid even though the
-      // task's original sourceMessageId can be null/different.
       if (source == null) throw Exception('The source message is no longer available in this conversation.');
     }
     return conversation;
   }
 
   Future<void> _ensureTaskCard(ChatTask task) async {
-    final timeline = dataStore.getMessages(task.sourceConversationId);
-    final existingCard = timeline.where((message) => message.linkedTaskId == task.id).firstOrNull;
+    final existingCard = dataStore
+        .getMessages(task.sourceConversationId)
+        .where((message) => message.linkedTaskId == task.id)
+        .firstOrNull;
     if (existingCard != null) return;
 
     await dataStore.sendMessage(
@@ -180,8 +211,52 @@ class TaskWorkflowService {
     return null;
   }
 
+  String _extractTaskId(dynamic raw) {
+    if (raw == null) return '';
+    if (raw is String) return raw.trim();
+    if (raw is Map) {
+      for (final key in <String>['id', 'task_id', 'taskId']) {
+        final value = raw[key];
+        if (value != null && value.toString().trim().isNotEmpty) return value.toString().trim();
+      }
+      return '';
+    }
+    if (raw is List && raw.isNotEmpty) return _extractTaskId(raw.first);
+    return raw.toString().trim();
+  }
+
   bool _sameIds(List<String> a, List<String> b) {
     if (a.length != b.length) return false;
     return a.toSet().containsAll(b);
+  }
+
+  String _priorityToDatabase(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.low:
+        return 'low';
+      case TaskPriority.medium:
+        return 'normal';
+      case TaskPriority.high:
+        return 'high';
+      case TaskPriority.urgent:
+        return 'urgent';
+    }
+  }
+
+  String _statusToDatabase(TaskStatus status) {
+    switch (status) {
+      case TaskStatus.inbox:
+        return 'inbox';
+      case TaskStatus.assigned:
+        return 'assigned';
+      case TaskStatus.inProgress:
+        return 'in_progress';
+      case TaskStatus.blocked:
+        return 'blocked';
+      case TaskStatus.completed:
+        return 'completed';
+      case TaskStatus.archived:
+        return 'archived';
+    }
   }
 }
