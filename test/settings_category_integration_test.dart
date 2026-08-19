@@ -19,13 +19,14 @@ void main() {
       expect(source, contains("_featureSection('$section')"), reason: '$section must be reachable from Settings');
     }
     expect(source, isNot(contains("title: 'Advanced settings'")));
-    expect(source, contains("title: 'All customization settings'"));
+    expect(source, contains("'All customization settings'"));
+    expect(source, contains("_sectionLabel(context, 'ACCOUNT')"));
   });
 
   test('settings and category pages constrain wide layouts and preserve touch sizing', () {
     final root = File('lib/features/settings/settings_screen.dart').readAsStringSync();
     final categories = File('lib/features/settings/gb_features/gb_settings_hub_screen.dart').readAsStringSync();
-    expect(root, contains('BoxConstraints(maxWidth: 820)'));
+    expect(root, contains('BoxConstraints(maxWidth: 860)'));
     expect(categories, contains('BoxConstraints(maxWidth: 760)'));
     expect(categories, contains('minTileHeight: 62'));
   });
