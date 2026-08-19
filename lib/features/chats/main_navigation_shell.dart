@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../ui/core/theme/theme_controller.dart';
+import '../../ui/core/theme/theme_controller.dart';
 import '../../data/repositories/mock_data_store.dart';
 import '../../ui/core/controllers/chaty_preferences_controller.dart';
 import '../../ui/core/controllers/appearance_variant_controller.dart';
