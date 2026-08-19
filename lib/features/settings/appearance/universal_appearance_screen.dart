@@ -85,8 +85,8 @@ class UniversalAppearanceScreen extends StatelessWidget {
                       icon: Icons.chat_bubble_outline_rounded,
                       onSelected: (value) async {
                         final current = preferencesController.conversation;
-                        await preferencesController.updateConversation(current.copyWith(bubbleShape: value), logTitle: 'Bubble Template');
-                        await preferencesController.updateGbFeature('bubble_style', value);
+                        preferencesController.updateConversation(current.copyWith(bubbleShape: value), logTitle: 'Bubble Template');
+                        preferencesController.updateGbFeature('bubble_style', value);
                       },
                     ),
                     _VariantSection(
@@ -97,8 +97,8 @@ class UniversalAppearanceScreen extends StatelessWidget {
                       icon: Icons.done_all_rounded,
                       onSelected: (value) async {
                         final current = preferencesController.conversation;
-                        await preferencesController.updateConversation(current.copyWith(tickStyle: value), logTitle: 'Tick Template');
-                        await preferencesController.updateGbFeature('tick_style', value);
+                        preferencesController.updateConversation(current.copyWith(tickStyle: value), logTitle: 'Tick Template');
+                        preferencesController.updateGbFeature('tick_style', value);
                       },
                     ),
                     _VariantSection(
