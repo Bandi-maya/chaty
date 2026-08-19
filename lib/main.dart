@@ -9,7 +9,8 @@ import 'package:chat/data/services/chaty_backend_service.dart';
 import 'package:chat/data/services/message_automation_service.dart';
 import 'package:chat/domain/models/user_profile.dart';
 import 'package:chat/features/auth/create_new_password_screen.dart';
-import 'package:chat/features/auth/splash_screen.dart';
+import 'package:chat/features/auth/welcome_screen.dart';
+import 'package:chat/features/chats/main_navigation_shell.dart';
 import 'package:chat/injection/locator.dart';
 import 'package:chat/ui/core/controllers/chaty_preferences_controller.dart';
 import 'package:chat/ui/core/theme/theme_controller.dart';
@@ -74,25 +75,34 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
   }
 
   void _handleAuthUiEvent(AuthState state) {
-    if (state.event != AuthChangeEvent.passwordRecovery || _recoveryRouteOpen) {
+    if (state.event == AuthChangeEvent.passwordRecovery && !_recoveryRouteOpen) {
+      _recoveryRouteOpen = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final navigator = _rootNavigatorKey.currentState;
+        if (navigator == null) {
+          _recoveryRouteOpen = false;
+          return;
+        }
+        navigator.pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => CreateNewPasswordScreen(
+              email: state.session?.user.email ?? '',
+            ),
+          ),
+          (route) => false,
+        );
+      });
       return;
     }
-    _recoveryRouteOpen = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final navigator = _rootNavigatorKey.currentState;
-      if (navigator == null) {
-        _recoveryRouteOpen = false;
-        return;
-      }
-      navigator.pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => CreateNewPasswordScreen(
-            email: state.session?.user.email ?? '',
-          ),
-        ),
-        (route) => false,
-      );
-    });
+
+    if (state.event == AuthChangeEvent.signedOut) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _rootNavigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+          (route) => false,
+        );
+      });
+    }
   }
 
   @override
@@ -134,6 +144,7 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
       listenable: Listenable.merge(<Listenable>[
         _themeController,
         _preferencesController,
+        _backend,
       ]),
       builder: (context, _) {
         final currentTheme = _themeController.globalTheme;
@@ -152,7 +163,9 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
               ),
             );
           },
-          home: const SplashScreen(),
+          home: _backend.isAuthenticated
+              ? const MainNavigationShell()
+              : const WelcomeScreen(),
         );
       },
     );
