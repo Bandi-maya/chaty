@@ -4,6 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+const String _turnUrl = String.fromEnvironment('TURN_URL');
+const String _turnUsername = String.fromEnvironment('TURN_USERNAME');
+const String _turnCredential = String.fromEnvironment('TURN_CREDENTIAL');
+
 class ChatyCallSession {
   final String id;
   final String conversationId;
@@ -57,6 +61,7 @@ class ChatyCallService extends ChangeNotifier {
   StreamSubscription<List<Map<String, dynamic>>>? _candidateSubscription;
   StreamSubscription<List<Map<String, dynamic>>>? _incomingSubscription;
   final Set<String> _appliedCandidateIds = <String>{};
+  final List<RTCIceCandidate> _pendingLocalCandidates = <RTCIceCandidate>[];
   final StreamController<ChatyCallSession> _incomingController = StreamController<ChatyCallSession>.broadcast();
 
   ChatyCallSession? session;
@@ -71,47 +76,36 @@ class ChatyCallService extends ChangeNotifier {
   Stream<ChatyCallSession> get incomingCalls => _incomingController.stream;
   MediaStream? get localStream => _localStream;
   MediaStream? get remoteStream => _remoteStream;
+  bool get hasTurnRelay => _turnUrl.isNotEmpty && _turnUsername.isNotEmpty && _turnCredential.isNotEmpty;
 
   Future<void> watchIncomingCalls() async {
     await _incomingSubscription?.cancel();
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return;
-    _incomingSubscription = _client
-        .from('call_sessions')
-        .stream(primaryKey: const <String>['id'])
-        .eq('callee_id', userId)
-        .listen((rows) {
-      final ringing = rows
-          .map((row) => ChatyCallSession.fromRow(Map<String, dynamic>.from(row)))
-          .where((call) => call.status == 'ringing')
-          .toList()
-        ..sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    _incomingSubscription = _client.from('call_sessions').stream(primaryKey: const <String>['id']).eq('callee_id', userId).listen((rows) {
+      final ringing = rows.map((row) => ChatyCallSession.fromRow(Map<String, dynamic>.from(row))).where((call) => call.status == 'ringing').toList()..sort((a, b) => b.startedAt.compareTo(a.startedAt));
       if (ringing.isNotEmpty) _incomingController.add(ringing.first);
     });
   }
 
-  Future<ChatyCallSession> startOutgoing({
-    required String conversationId,
-    required String calleeId,
-    required bool isVideo,
-  }) async {
+  Future<ChatyCallSession> startOutgoing({required String conversationId, required String calleeId, required bool isVideo}) async {
+    session = null;
+    _appliedCandidateIds.clear();
+    _pendingLocalCandidates.clear();
     await _preparePeer(isVideo: isVideo);
     final offer = await _peer!.createOffer();
     await _peer!.setLocalDescription(offer);
     final callerId = _requireUserId();
-    final row = await _client
-        .from('call_sessions')
-        .insert(<String, dynamic>{
-          'conversation_id': conversationId,
-          'caller_id': callerId,
-          'callee_id': calleeId,
-          'kind': isVideo ? 'video' : 'audio',
-          'status': 'ringing',
-          'offer_sdp': offer.sdp,
-        })
-        .select()
-        .single();
+    final row = await _client.from('call_sessions').insert(<String, dynamic>{
+      'conversation_id': conversationId,
+      'caller_id': callerId,
+      'callee_id': calleeId,
+      'kind': isVideo ? 'video' : 'audio',
+      'status': 'ringing',
+      'offer_sdp': offer.sdp,
+    }).select().single();
     session = ChatyCallSession.fromRow(Map<String, dynamic>.from(row));
+    await _flushPendingLocalCandidates();
     state = ChatyCallState.ringing;
     notifyListeners();
     await _bindSession(session!.id);
@@ -119,10 +113,10 @@ class ChatyCallService extends ChangeNotifier {
   }
 
   Future<void> acceptIncoming(ChatyCallSession incoming) async {
-    if (incoming.offerSdp == null || incoming.offerSdp!.isEmpty) {
-      throw Exception('The incoming call has no valid WebRTC offer.');
-    }
+    if (incoming.offerSdp == null || incoming.offerSdp!.isEmpty) throw Exception('The incoming call has no valid WebRTC offer.');
     session = incoming;
+    _appliedCandidateIds.clear();
+    _pendingLocalCandidates.clear();
     state = ChatyCallState.connecting;
     notifyListeners();
     await _preparePeer(isVideo: incoming.isVideo);
@@ -130,21 +124,27 @@ class ChatyCallService extends ChangeNotifier {
     final answer = await _peer!.createAnswer();
     await _peer!.setLocalDescription(answer);
     await _client.from('call_sessions').update(<String, dynamic>{
-      'status': 'accepted',
-      'answer_sdp': answer.sdp,
-      'connected_at': DateTime.now().toUtc().toIso8601String(),
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
+      'status': 'accepted', 'answer_sdp': answer.sdp, 'connected_at': DateTime.now().toUtc().toIso8601String(), 'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', incoming.id);
+    await _flushPendingLocalCandidates();
     await _bindSession(incoming.id);
   }
 
   Future<void> declineIncoming(ChatyCallSession incoming) async {
     await _client.from('call_sessions').update(<String, dynamic>{
-      'status': 'declined',
-      'ended_at': DateTime.now().toUtc().toIso8601String(),
-      'ended_by': _requireUserId(),
-      'updated_at': DateTime.now().toUtc().toIso8601String(),
+      'status': 'declined', 'ended_at': DateTime.now().toUtc().toIso8601String(), 'ended_by': _requireUserId(), 'updated_at': DateTime.now().toUtc().toIso8601String(),
     }).eq('id', incoming.id);
+  }
+
+  List<Map<String, dynamic>> _iceServers() {
+    final servers = <Map<String, dynamic>>[
+      <String, dynamic>{'urls': 'stun:stun.l.google.com:19302'},
+      <String, dynamic>{'urls': 'stun:stun1.l.google.com:19302'},
+    ];
+    if (hasTurnRelay) {
+      servers.add(<String, dynamic>{'urls': _turnUrl, 'username': _turnUsername, 'credential': _turnCredential});
+    }
+    return servers;
   }
 
   Future<void> _preparePeer({required bool isVideo}) async {
@@ -153,96 +153,67 @@ class ChatyCallService extends ChangeNotifier {
     notifyListeners();
     _localStream = await navigator.mediaDevices.getUserMedia(<String, dynamic>{
       'audio': true,
-      'video': isVideo
-          ? <String, dynamic>{'facingMode': 'user', 'width': 1280, 'height': 720, 'frameRate': 30}
-          : false,
+      'video': isVideo ? <String, dynamic>{'facingMode': 'user', 'width': 1280, 'height': 720, 'frameRate': 30} : false,
     });
     cameraEnabled = isVideo;
     microphoneEnabled = true;
-    _peer = await createPeerConnection(<String, dynamic>{
-      'iceServers': <Map<String, dynamic>>[
-        <String, dynamic>{'urls': 'stun:stun.l.google.com:19302'},
-        <String, dynamic>{'urls': 'stun:stun1.l.google.com:19302'},
-      ],
-      'sdpSemantics': 'unified-plan',
-    });
-    for (final track in _localStream!.getTracks()) {
-      await _peer!.addTrack(track, _localStream!);
-    }
-    _peer!.onTrack = (event) {
-      if (event.streams.isEmpty) return;
-      _remoteStream = event.streams.first;
-      notifyListeners();
-    };
+    _peer = await createPeerConnection(<String, dynamic>{'iceServers': _iceServers(), 'sdpSemantics': 'unified-plan'});
+    for (final track in _localStream!.getTracks()) { await _peer!.addTrack(track, _localStream!); }
+    _peer!.onTrack = (event) { if (event.streams.isEmpty) return; _remoteStream = event.streams.first; notifyListeners(); };
     _peer!.onConnectionState = (peerState) {
       if (peerState == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         state = ChatyCallState.connected;
       } else if (peerState == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
         state = ChatyCallState.failed;
-        errorMessage = 'The peer connection failed. Check network connectivity and try again.';
+        errorMessage = hasTurnRelay
+            ? 'The peer connection failed. Check network connectivity and try again.'
+            : 'The direct connection failed. Configure TURN_URL, TURN_USERNAME and TURN_CREDENTIAL for relay fallback on restrictive networks.';
       } else if (peerState == RTCPeerConnectionState.RTCPeerConnectionStateConnecting) {
         state = ChatyCallState.connecting;
       }
       notifyListeners();
     };
     _peer!.onIceCandidate = (candidate) {
-      if (candidate.candidate == null || candidate.candidate!.isEmpty || session == null) return;
-      unawaited(_publishCandidate(candidate));
+      if (candidate.candidate == null || candidate.candidate!.isEmpty) return;
+      if (session == null) {
+        _pendingLocalCandidates.add(candidate);
+      } else {
+        unawaited(_publishCandidate(candidate));
+      }
     };
+  }
+
+  Future<void> _flushPendingLocalCandidates() async {
+    if (session == null || _pendingLocalCandidates.isEmpty) return;
+    final pending = List<RTCIceCandidate>.from(_pendingLocalCandidates);
+    _pendingLocalCandidates.clear();
+    for (final candidate in pending) { await _publishCandidate(candidate); }
   }
 
   Future<void> _bindSession(String callId) async {
     await _sessionSubscription?.cancel();
     await _candidateSubscription?.cancel();
-    _sessionSubscription = _client
-        .from('call_sessions')
-        .stream(primaryKey: const <String>['id'])
-        .eq('id', callId)
-        .listen((rows) async {
+    _sessionSubscription = _client.from('call_sessions').stream(primaryKey: const <String>['id']).eq('id', callId).listen((rows) async {
       if (rows.isEmpty) return;
       final next = ChatyCallSession.fromRow(Map<String, dynamic>.from(rows.first));
       session = next;
       if (next.status == 'accepted' && next.answerSdp != null && _peer != null) {
         final remote = await _peer!.getRemoteDescription();
-        if (remote == null) {
-          state = ChatyCallState.connecting;
-          notifyListeners();
-          await _peer!.setRemoteDescription(RTCSessionDescription(next.answerSdp, 'answer'));
-        }
-      } else if (next.status == 'declined') {
-        state = ChatyCallState.declined;
-        await _closeMedia();
-      } else if (next.status == 'ended') {
-        state = ChatyCallState.ended;
-        await _closeMedia();
-      } else if (next.status == 'failed') {
-        state = ChatyCallState.failed;
-        await _closeMedia();
-      }
+        if (remote == null) { state = ChatyCallState.connecting; notifyListeners(); await _peer!.setRemoteDescription(RTCSessionDescription(next.answerSdp, 'answer')); }
+      } else if (next.status == 'declined') { state = ChatyCallState.declined; await _closeMedia(); }
+      else if (next.status == 'ended') { state = ChatyCallState.ended; await _closeMedia(); }
+      else if (next.status == 'failed') { state = ChatyCallState.failed; await _closeMedia(); }
       notifyListeners();
     });
-    _candidateSubscription = _client
-        .from('call_ice_candidates')
-        .stream(primaryKey: const <String>['id'])
-        .eq('call_id', callId)
-        .listen((rows) async {
+    _candidateSubscription = _client.from('call_ice_candidates').stream(primaryKey: const <String>['id']).eq('call_id', callId).listen((rows) async {
       final myId = _client.auth.currentUser?.id;
       for (final row in rows) {
         final id = row['id']?.toString() ?? '';
         if (id.isEmpty || _appliedCandidateIds.contains(id) || row['sender_id']?.toString() == myId) continue;
         _appliedCandidateIds.add(id);
-        final candidate = RTCIceCandidate(
-          row['candidate']?.toString(),
-          row['sdp_mid']?.toString(),
-          row['sdp_mline_index'] as int?,
-        );
-        try {
-          await _peer?.addCandidate(candidate);
-        } catch (_) {
-          // Remote SDP can arrive a fraction later. Realtime reconciliation will
-          // redeliver persisted candidates on the next stream emission.
-          _appliedCandidateIds.remove(id);
-        }
+        final rawIndex = row['sdp_mline_index'];
+        final candidate = RTCIceCandidate(row['candidate']?.toString(), row['sdp_mid']?.toString(), rawIndex is num ? rawIndex.toInt() : int.tryParse(rawIndex?.toString() ?? ''));
+        try { await _peer?.addCandidate(candidate); } catch (_) { _appliedCandidateIds.remove(id); }
       }
     });
   }
@@ -251,51 +222,19 @@ class ChatyCallService extends ChangeNotifier {
     final active = session;
     if (active == null) return;
     await _client.from('call_ice_candidates').insert(<String, dynamic>{
-      'call_id': active.id,
-      'sender_id': _requireUserId(),
-      'candidate': candidate.candidate,
-      'sdp_mid': candidate.sdpMid,
-      'sdp_mline_index': candidate.sdpMLineIndex,
+      'call_id': active.id, 'sender_id': _requireUserId(), 'candidate': candidate.candidate, 'sdp_mid': candidate.sdpMid, 'sdp_mline_index': candidate.sdpMLineIndex,
     });
   }
 
-  Future<void> setMicrophoneEnabled(bool enabled) async {
-    microphoneEnabled = enabled;
-    for (final track in _localStream?.getAudioTracks() ?? const <MediaStreamTrack>[]) {
-      track.enabled = enabled;
-    }
-    notifyListeners();
-  }
-
-  Future<void> setCameraEnabled(bool enabled) async {
-    cameraEnabled = enabled;
-    for (final track in _localStream?.getVideoTracks() ?? const <MediaStreamTrack>[]) {
-      track.enabled = enabled;
-    }
-    notifyListeners();
-  }
-
-  Future<void> switchCamera() async {
-    final tracks = _localStream?.getVideoTracks() ?? const <MediaStreamTrack>[];
-    if (tracks.isEmpty) return;
-    await Helper.switchCamera(tracks.first);
-  }
-
-  Future<void> setSpeakerEnabled(bool enabled) async {
-    speakerEnabled = enabled;
-    await Helper.setSpeakerphoneOn(enabled);
-    notifyListeners();
-  }
+  Future<void> setMicrophoneEnabled(bool enabled) async { microphoneEnabled = enabled; for (final track in _localStream?.getAudioTracks() ?? const <MediaStreamTrack>[]) { track.enabled = enabled; } notifyListeners(); }
+  Future<void> setCameraEnabled(bool enabled) async { cameraEnabled = enabled; for (final track in _localStream?.getVideoTracks() ?? const <MediaStreamTrack>[]) { track.enabled = enabled; } notifyListeners(); }
+  Future<void> switchCamera() async { final tracks = _localStream?.getVideoTracks() ?? const <MediaStreamTrack>[]; if (tracks.isEmpty) return; await Helper.switchCamera(tracks.first); }
+  Future<void> setSpeakerEnabled(bool enabled) async { speakerEnabled = enabled; await Helper.setSpeakerphoneOn(enabled); notifyListeners(); }
 
   Future<void> endCall() async {
     final active = session;
     if (active != null && active.status != 'ended' && active.status != 'declined') {
-      await _client.from('call_sessions').update(<String, dynamic>{
-        'status': 'ended',
-        'ended_at': DateTime.now().toUtc().toIso8601String(),
-        'ended_by': _requireUserId(),
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', active.id);
+      await _client.from('call_sessions').update(<String, dynamic>{'status': 'ended', 'ended_at': DateTime.now().toUtc().toIso8601String(), 'ended_by': _requireUserId(), 'updated_at': DateTime.now().toUtc().toIso8601String()}).eq('id', active.id);
     }
     state = ChatyCallState.ended;
     await _closeMedia();
@@ -303,30 +242,15 @@ class ChatyCallService extends ChangeNotifier {
   }
 
   Future<void> _closeMedia() async {
-    for (final track in _localStream?.getTracks() ?? const <MediaStreamTrack>[]) {
-      await track.stop();
-    }
-    await _localStream?.dispose();
-    await _remoteStream?.dispose();
-    await _peer?.close();
-    _localStream = null;
-    _remoteStream = null;
-    _peer = null;
+    for (final track in _localStream?.getTracks() ?? const <MediaStreamTrack>[]) { await track.stop(); }
+    await _localStream?.dispose(); await _remoteStream?.dispose(); await _peer?.close();
+    _localStream = null; _remoteStream = null; _peer = null; _pendingLocalCandidates.clear();
   }
 
-  String _requireUserId() {
-    final id = _client.auth.currentUser?.id;
-    if (id == null) throw Exception('Authentication is required to start a call.');
-    return id;
-  }
+  String _requireUserId() { final id = _client.auth.currentUser?.id; if (id == null) throw Exception('Authentication is required to start a call.'); return id; }
 
   @override
   void dispose() {
-    unawaited(_sessionSubscription?.cancel());
-    unawaited(_candidateSubscription?.cancel());
-    unawaited(_incomingSubscription?.cancel());
-    unawaited(_incomingController.close());
-    unawaited(_closeMedia());
-    super.dispose();
+    unawaited(_sessionSubscription?.cancel()); unawaited(_candidateSubscription?.cancel()); unawaited(_incomingSubscription?.cancel()); unawaited(_incomingController.close()); unawaited(_closeMedia()); super.dispose();
   }
 }
