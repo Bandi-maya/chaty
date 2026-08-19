@@ -42,6 +42,21 @@ class ChatMediaService {
       throw Exception('The selected file is not accessible on this device.');
     }
 
+    return uploadFile(
+      conversationId: conversationId,
+      type: type,
+      sourcePath: sourcePath,
+      displayName: picked.name,
+    );
+  }
+
+  Future<MessageAttachment> uploadFile({
+    required String conversationId,
+    required String type,
+    required String sourcePath,
+    String? displayName,
+    int durationSeconds = 0,
+  }) async {
     final file = File(sourcePath);
     if (!await file.exists()) {
       throw Exception('The selected file no longer exists.');
@@ -56,11 +71,11 @@ class ChatMediaService {
     final authUser = _client.auth.currentUser;
     if (authUser == null) throw Exception('Authentication required.');
 
-    final safeName = _safeFileName(picked.name);
+    final rawName = displayName ?? sourcePath.split(Platform.pathSeparator).last;
+    final safeName = _safeFileName(rawName);
     final objectPath =
         '${authUser.id}/$conversationId/${_uuid.v4()}_$safeName';
-    final mimeType = lookupMimeType(sourcePath) ??
-        _fallbackMimeForType(type);
+    final mimeType = lookupMimeType(sourcePath) ?? _fallbackMimeForType(type);
 
     await _client.storage.from(bucket).upload(
           objectPath,
@@ -75,11 +90,10 @@ class ChatMediaService {
     return MessageAttachment(
       id: _uuid.v4(),
       type: type,
-      name: picked.name,
+      name: rawName,
       size: _formatBytes(size),
-      // Store only the private object path. Signed URLs are generated on demand
-      // so chat history never persists a long-lived bearer URL.
       url: objectPath,
+      durationSeconds: durationSeconds,
     );
   }
 
@@ -113,7 +127,7 @@ class ChatMediaService {
     return switch (type) {
       'image' => 'image/jpeg',
       'video' => 'video/mp4',
-      'audio' => 'audio/mpeg',
+      'audio' => 'audio/mp4',
       _ => 'application/octet-stream',
     };
   }
