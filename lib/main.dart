@@ -12,6 +12,7 @@ import 'package:chat/features/auth/create_new_password_screen.dart';
 import 'package:chat/features/auth/welcome_screen.dart';
 import 'package:chat/features/chats/main_navigation_shell.dart';
 import 'package:chat/injection/locator.dart';
+import 'package:chat/ui/core/controllers/appearance_variant_controller.dart';
 import 'package:chat/ui/core/controllers/chaty_preferences_controller.dart';
 import 'package:chat/ui/core/theme/theme_controller.dart';
 import 'package:chat/ui/core/theme/theme_presets.dart';
@@ -53,6 +54,7 @@ class ChatyApp extends StatefulWidget {
 class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
   late final ThemeController _themeController;
   late final ChatyPreferencesController _preferencesController;
+  late final AppearanceVariantController _appearanceController;
   late final ChatyBackendService _backend;
   late final MessageAutomationService _automationService;
   late final StreamSubscription<AuthState> _authUiSubscription;
@@ -64,6 +66,7 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _themeController = locator<ThemeController>();
     _preferencesController = locator<ChatyPreferencesController>();
+    _appearanceController = locator<AppearanceVariantController>();
     _backend = locator<ChatyBackendService>();
     _automationService = MessageAutomationService(
       preferencesController: _preferencesController,
@@ -144,6 +147,7 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
       listenable: Listenable.merge(<Listenable>[
         _themeController,
         _preferencesController,
+        _appearanceController,
         _backend,
       ]),
       builder: (context, _) {
@@ -154,12 +158,22 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
           debugShowCheckedModeBanner: false,
           theme: currentTheme.toThemeData(),
           builder: (context, child) {
-            return ClickParticleOverlay(
-              preferencesController: _preferencesController,
-              child: FallingParticlesOverlay(
+            final media = MediaQuery.of(context);
+            final scaled = media.copyWith(
+              textScaler: TextScaler.linear(
+                (media.textScaler.scale(1.0) * _appearanceController.textScale)
+                    .clamp(0.8, 1.6),
+              ),
+            );
+            return MediaQuery(
+              data: scaled,
+              child: ClickParticleOverlay(
                 preferencesController: _preferencesController,
-                currentScope: 'Home',
-                child: child ?? const SizedBox(),
+                child: FallingParticlesOverlay(
+                  preferencesController: _preferencesController,
+                  currentScope: 'Home',
+                  child: child ?? const SizedBox(),
+                ),
               ),
             );
           },
