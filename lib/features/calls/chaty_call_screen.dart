@@ -10,6 +10,7 @@ import '../../injection/locator.dart';
 import '../../ui/core/controllers/chaty_preferences_controller.dart';
 import '../../ui/core/gb/gb_theme_overrides.dart';
 import '../../ui/core/theme/theme_config.dart';
+import '../../ui/core/ux/chaty_ux.dart';
 
 class ChatyCallScreen extends StatefulWidget {
   final ThemeConfig theme;
@@ -75,7 +76,9 @@ class _ChatyCallScreenState extends State<ChatyCallScreen> {
       await _windowChannel.invokeMethod<bool>('enterPictureInPicture', const <String, int>{'width': 16, 'height': 9});
     } on PlatformException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Mini player unavailable: ${error.message ?? 'Android rejected Picture-in-Picture.'}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Mini player unavailable: ${error.message ?? 'Android rejected Picture-in-Picture.'}')),
+      );
     }
   }
 
@@ -108,7 +111,10 @@ class _ChatyCallScreenState extends State<ChatyCallScreen> {
       });
     }
     if ({ChatyCallState.ended, ChatyCallState.declined}.contains(widget.callService.state)) {
-      Future<void>.delayed(const Duration(milliseconds: 500), () {
+      final delay = MediaQuery.maybeOf(context)?.disableAnimations == true
+          ? Duration.zero
+          : const Duration(milliseconds: 500);
+      Future<void>.delayed(delay, () {
         if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
       });
     }
@@ -168,6 +174,8 @@ class _ChatyCallScreenState extends State<ChatyCallScreen> {
     final theme = _theme;
     final isVideo = widget.isVideo;
     final remoteReady = widget.callService.remoteStream != null;
+    final fadeDuration = ChatyUx.motionDuration(context, standard: const Duration(milliseconds: 180));
+    final slideDuration = ChatyUx.motionDuration(context, standard: const Duration(milliseconds: 220));
 
     return PopScope(
       canPop: false,
@@ -187,7 +195,14 @@ class _ChatyCallScreenState extends State<ChatyCallScreen> {
                   fit: StackFit.expand,
                   children: [
                     if (isVideo && remoteReady)
-                      RTCVideoView(_remoteRenderer, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover)
+                      Semantics(
+                        image: true,
+                        label: 'Remote video from ${widget.title}',
+                        child: RTCVideoView(
+                          _remoteRenderer,
+                          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                        ),
+                      )
                     else
                       _AudioCallBackdrop(theme: theme, title: widget.title, status: _statusText),
                     if (isVideo && !remoteReady)
@@ -197,9 +212,26 @@ class _ChatyCallScreenState extends State<ChatyCallScreen> {
                           children: [
                             _Avatar(theme: theme, title: widget.title, size: compact ? 88 : 112),
                             const SizedBox(height: 18),
-                            Text(widget.title, style: TextStyle(color: theme.primaryTextColor, fontSize: compact ? 20 : 26, fontWeight: FontWeight.w800)),
+                            Text(
+                              widget.title,
+                              style: TextStyle(
+                                color: theme.primaryTextColor,
+                                fontSize: compact ? 20 : 26,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
                             const SizedBox(height: 8),
-                            Text(_statusText, textAlign: TextAlign.center, style: TextStyle(color: theme.secondaryTextColor)),
+                            Semantics(
+                              liveRegion: true,
+                              label: _statusText,
+                              child: ExcludeSemantics(
+                                child: Text(
+                                  _statusText,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: theme.secondaryTextColor),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -209,11 +241,19 @@ class _ChatyCallScreenState extends State<ChatyCallScreen> {
                         top: 72,
                         width: compact ? 96 : 126,
                         height: compact ? 138 : 178,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(border: Border.all(color: theme.surfaceColor)),
-                            child: RTCVideoView(_localRenderer, mirror: true, objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover),
+                        child: Semantics(
+                          image: true,
+                          label: 'Your camera preview',
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(border: Border.all(color: theme.surfaceColor)),
+                              child: RTCVideoView(
+                                _localRenderer,
+                                mirror: true,
+                                objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -223,35 +263,54 @@ class _ChatyCallScreenState extends State<ChatyCallScreen> {
                       top: 0,
                       child: AnimatedOpacity(
                         opacity: _controlsVisible ? 1 : 0,
-                        duration: const Duration(milliseconds: 180),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                          child: Row(
-                            children: [
-                              IconButton.filledTonal(
-                                tooltip: 'End call and go back',
-                                onPressed: _end,
-                                icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                              ),
-                              if (isVideo && _pipSupported) ...[
-                                const SizedBox(width: 8),
+                        duration: fadeDuration,
+                        child: IgnorePointer(
+                          ignoring: !_controlsVisible,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                            child: Row(
+                              children: [
                                 IconButton.filledTonal(
-                                  tooltip: 'Open video in mini player',
-                                  onPressed: _enterPictureInPicture,
-                                  icon: const Icon(Icons.picture_in_picture_alt_rounded),
+                                  tooltip: 'End call and go back',
+                                  onPressed: _end,
+                                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                                ),
+                                if (isVideo && _pipSupported) ...[
+                                  const SizedBox(width: 8),
+                                  IconButton.filledTonal(
+                                    tooltip: 'Open video in mini player',
+                                    onPressed: _enterPictureInPicture,
+                                    icon: const Icon(Icons.picture_in_picture_alt_rounded),
+                                  ),
+                                ],
+                                const Spacer(),
+                                Flexible(
+                                  child: Semantics(
+                                    liveRegion: true,
+                                    label: '${widget.title}. $_statusText',
+                                    child: ExcludeSemantics(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            widget.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(color: theme.primaryTextColor, fontWeight: FontWeight.w800),
+                                          ),
+                                          Text(
+                                            _statusText,
+                                            maxLines: 2,
+                                            textAlign: TextAlign.right,
+                                            style: TextStyle(color: theme.secondaryTextColor, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ],
-                              const Spacer(),
-                              Flexible(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: theme.primaryTextColor, fontWeight: FontWeight.w800)),
-                                    Text(_statusText, maxLines: 2, textAlign: TextAlign.right, style: TextStyle(color: theme.secondaryTextColor, fontSize: 12)),
-                                  ],
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
@@ -262,21 +321,28 @@ class _ChatyCallScreenState extends State<ChatyCallScreen> {
                       bottom: 12,
                       child: AnimatedSlide(
                         offset: _controlsVisible ? Offset.zero : const Offset(0, 1.4),
-                        duration: const Duration(milliseconds: 220),
+                        duration: slideDuration,
                         curve: Curves.easeOutCubic,
-                        child: _CallControls(
-                          theme: theme,
-                          compact: compact,
-                          isVideo: isVideo,
-                          service: widget.callService,
-                          onEnd: _end,
+                        child: IgnorePointer(
+                          ignoring: !_controlsVisible,
+                          child: _CallControls(
+                            theme: theme,
+                            compact: compact,
+                            isVideo: isVideo,
+                            service: widget.callService,
+                            onEnd: _end,
+                          ),
                         ),
                       ),
                     ),
                     if (_initializing)
-                      ColoredBox(
-                        color: theme.backgroundColor.withValues(alpha: .82),
-                        child: Center(child: CircularProgressIndicator(color: theme.accentColor)),
+                      Semantics(
+                        liveRegion: true,
+                        label: 'Preparing call',
+                        child: ColoredBox(
+                          color: theme.backgroundColor.withValues(alpha: .82),
+                          child: Center(child: CircularProgressIndicator(color: theme.accentColor)),
+                        ),
                       ),
                   ],
                 );
@@ -296,7 +362,13 @@ class _CallControls extends StatelessWidget {
   final ChatyCallService service;
   final Future<void> Function() onEnd;
 
-  const _CallControls({required this.theme, required this.compact, required this.isVideo, required this.service, required this.onEnd});
+  const _CallControls({
+    required this.theme,
+    required this.compact,
+    required this.isVideo,
+    required this.service,
+    required this.onEnd,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -330,7 +402,9 @@ class _CallControls extends StatelessWidget {
         color: theme.surfaceColor.withValues(alpha: .94),
         borderRadius: BorderRadius.circular(26),
         border: Border.all(color: theme.cardColor),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .15), blurRadius: 24, offset: const Offset(0, 8))],
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: .15), blurRadius: 24, offset: const Offset(0, 8)),
+        ],
       ),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
@@ -347,13 +421,27 @@ class _ControlButton extends StatelessWidget {
   final bool destructive;
   final FutureOr<void> Function() onPressed;
 
-  const _ControlButton({required this.label, required this.icon, required this.selected, required this.onPressed, this.destructive = false});
+  const _ControlButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onPressed,
+    this.destructive = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final background = destructive ? scheme.error : selected ? scheme.primaryContainer : scheme.surfaceContainerHighest;
-    final foreground = destructive ? scheme.onError : selected ? scheme.onPrimaryContainer : scheme.onSurface;
+    final background = destructive
+        ? scheme.error
+        : selected
+            ? scheme.primaryContainer
+            : scheme.surfaceContainerHighest;
+    final foreground = destructive
+        ? scheme.onError
+        : selected
+            ? scheme.onPrimaryContainer
+            : scheme.onSurface;
     return Semantics(
       button: true,
       selected: selected,
@@ -367,11 +455,21 @@ class _ControlButton extends StatelessWidget {
             children: [
               IconButton.filled(
                 onPressed: () => onPressed(),
-                style: IconButton.styleFrom(backgroundColor: background, foregroundColor: foreground, minimumSize: const Size(48, 48)),
+                style: IconButton.styleFrom(
+                  backgroundColor: background,
+                  foregroundColor: foreground,
+                  minimumSize: const Size(48, 48),
+                ),
                 icon: Icon(icon),
               ),
               const SizedBox(height: 4),
-              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10.5)),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 10.5),
+              ),
             ],
           ),
         ),
@@ -388,15 +486,29 @@ class _AudioCallBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _Avatar(theme: theme, title: title, size: 118),
-            const SizedBox(height: 22),
-            Text(title, textAlign: TextAlign.center, style: TextStyle(color: theme.primaryTextColor, fontSize: 28, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            Text(status, textAlign: TextAlign.center, style: TextStyle(color: theme.secondaryTextColor, fontSize: 15)),
-          ],
+        child: Semantics(
+          liveRegion: true,
+          label: '$title. $status',
+          child: ExcludeSemantics(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _Avatar(theme: theme, title: title, size: 118),
+                const SizedBox(height: 22),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: theme.primaryTextColor, fontSize: 28, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  status,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: theme.secondaryTextColor, fontSize: 15),
+                ),
+              ],
+            ),
+          ),
         ),
       );
 }
@@ -409,13 +521,24 @@ class _Avatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final initials = title.trim().isEmpty ? 'C' : title.trim().split(RegExp(r'\s+')).take(2).map((part) => part[0]).join().toUpperCase();
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: theme.accentColor.withValues(alpha: .16), border: Border.all(color: theme.accentColor.withValues(alpha: .5), width: 2)),
-      alignment: Alignment.center,
-      child: Text(initials, style: TextStyle(color: theme.accentColor, fontSize: size * .31, fontWeight: FontWeight.w900)),
+    final initials = title.trim().isEmpty
+        ? 'C'
+        : title.trim().split(RegExp(r'\s+')).take(2).map((part) => part[0]).join().toUpperCase();
+    return ExcludeSemantics(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: theme.accentColor.withValues(alpha: .16),
+          border: Border.all(color: theme.accentColor.withValues(alpha: .5), width: 2),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          initials,
+          style: TextStyle(color: theme.accentColor, fontSize: size * .31, fontWeight: FontWeight.w900),
+        ),
+      ),
     );
   }
 }
