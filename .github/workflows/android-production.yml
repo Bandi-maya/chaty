@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - production-supabase
+      - feat/settings-ui-system-overhaul
   pull_request:
     branches:
       - main
