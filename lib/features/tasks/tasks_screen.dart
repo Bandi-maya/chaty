@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../ui/core/theme/theme_config.dart';
+import '../../ui/core/theme/theme_config.dart';
 import '../../domain/models/chat_task.dart';
 import '../../data/repositories/mock_data_store.dart';
 import '../../ui/core/widgets/status_badge.dart';
@@ -8,7 +8,7 @@ import '../../ui/core/widgets/app_avatar.dart';
 import 'task_create_edit_modal.dart';
 import 'task_detail_screen.dart';
 import '../../injection/locator.dart';
-import '../../../ui/core/theme/theme_controller.dart';
+import '../../ui/core/theme/theme_controller.dart';
 
 class TasksScreen extends StatefulWidget {
   final ThemeConfig theme;
