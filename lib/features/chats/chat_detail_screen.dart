@@ -9,11 +9,14 @@ import '../../domain/models/user_profile.dart';
 import '../../domain/models/chat_message.dart';
 import '../../data/repositories/mock_data_store.dart';
 import '../../ui/core/controllers/chaty_preferences_controller.dart';
+import '../../ui/core/controllers/appearance_variant_controller.dart';
 import '../../ui/core/design_system/chaty_settings_primitives.dart';
 import '../../ui/core/gb/gb_theme_overrides.dart';
 import '../../ui/core/widgets/app_avatar.dart';
 import '../../ui/core/widgets/security_chip.dart';
 import '../../ui/core/commands/chat_command_parser.dart';
+import '../../ui/core/composer/premium_message_composer.dart';
+import '../../injection/locator.dart';
 import '../messages/message_bubble.dart';
 import '../messages/message_action_sheet.dart';
 import '../messages/attachment_sheet.dart';
@@ -283,6 +286,41 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
+  Future<void> _openEmojiPicker() async {
+    const emojis = <String>[
+      '😀','😂','🥰','😍','🙂','😉','😎','🤔','😭','😡','👍','👎','👏','🙏','❤️','🔥','🎉','✨','💯','✅','🚀','👀','🤝','💪','🥳','😴','🤯','😅','🙌','💡',
+    ];
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: emojis
+                .map((emoji) => InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => Navigator.of(context).pop(emoji),
+                      child: SizedBox(width: 44, height: 44, child: Center(child: Text(emoji, style: const TextStyle(fontSize: 25)))),
+                    ))
+                .toList(growable: false),
+          ),
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    final value = _textCtrl.value;
+    final selection = value.selection.isValid ? value.selection : TextSelection.collapsed(offset: value.text.length);
+    final start = selection.start.clamp(0, value.text.length);
+    final end = selection.end.clamp(0, value.text.length);
+    final next = value.text.replaceRange(start, end, selected);
+    final cursor = start + selected.length;
+    _textCtrl.value = TextEditingValue(text: next, selection: TextSelection.collapsed(offset: cursor));
+    _handleComposerChanged(next);
+  }
+
   void _startCall(bool isVideo) {
     final conversation = widget.dataStore.conversations
         .where((item) => item.id == widget.conversationId)
@@ -333,6 +371,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         : (remoteTyping ? 'someone is typing…' : '${conversation.participantIds.length} participants');
     final messages = dataStore.getMessages(widget.conversationId);
     final autoPrefs = widget.preferencesController.automation;
+    final appearanceController = locator<AppearanceVariantController>();
 
     Widget chat = Scaffold(
       backgroundColor: theme.backgroundColor,
@@ -412,9 +451,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           children: [
             Expanded(
               child: messages.isEmpty
-                  ? Center(
-                      child: Text('No messages yet', style: TextStyle(color: theme.secondaryTextColor)),
-                    )
+                  ? Center(child: Text('No messages yet', style: TextStyle(color: theme.secondaryTextColor)))
                   : ListView.builder(
                       controller: _scrollCtrl,
                       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -426,28 +463,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           message: message,
                           isMe: isMine,
                           theme: theme,
-                          senderName: conversation.type == ConversationType.group && !isMine
-                              ? _senderName(message.senderId)
-                              : null,
+                          senderName: conversation.type == ConversationType.group && !isMine ? _senderName(message.senderId) : null,
                           onLongPress: () => _onMessageLongPress(message),
                           onReactionTap: (emoji) => dataStore.toggleReaction(conversation.id, message.id, emoji),
-                          onTaskTap: message.linkedTaskId == null
-                              ? null
-                              : () => _openCreateTaskModal(sourceMessageId: message.id),
+                          onTaskTap: message.linkedTaskId == null ? null : () => _openCreateTaskModal(sourceMessageId: message.id),
                           onMediaTap: message.attachment == null
                               ? null
                               : () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => MediaViewerScreen(
-                                        title: message.attachment!.name,
-                                        type: message.attachment!.type,
-                                        size: message.attachment!.size,
-                                        storagePath: message.attachment!.url,
-                                        theme: theme,
-                                      ),
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => MediaViewerScreen(
+                                      title: message.attachment!.name,
+                                      type: message.attachment!.type,
+                                      size: message.attachment!.size,
+                                      storagePath: message.attachment!.url,
+                                      theme: theme,
                                     ),
-                                  );
+                                  ));
                                 },
                         );
                         if (!ChatAttachmentActions.isPollMessage(message)) return bubble;
@@ -473,10 +504,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   children: autoPrefs.quickReplies.map((reply) {
                     return ListTile(
                       dense: true,
-                      title: Text(
-                        '${reply.shortcut} — ${reply.title}',
-                        style: TextStyle(color: theme.primaryTextColor, fontWeight: FontWeight.w700, fontSize: 12.5),
-                      ),
+                      title: Text('${reply.shortcut} — ${reply.title}', style: TextStyle(color: theme.primaryTextColor, fontWeight: FontWeight.w700, fontSize: 12.5)),
                       subtitle: Text(reply.content, maxLines: 1, overflow: TextOverflow.ellipsis),
                       onTap: () {
                         _textCtrl.text = reply.content;
@@ -499,40 +527,34 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Replying to ${_senderName(_replyTarget!.senderId)}',
-                            style: TextStyle(color: theme.accentColor, fontSize: 11.5, fontWeight: FontWeight.w700),
-                          ),
-                          Text(
-                            _replyTarget!.text,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: theme.secondaryTextColor, fontSize: 11.5),
-                          ),
+                          Text('Replying to ${_senderName(_replyTarget!.senderId)}', style: TextStyle(color: theme.accentColor, fontSize: 11.5, fontWeight: FontWeight.w700)),
+                          Text(_replyTarget!.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: theme.secondaryTextColor, fontSize: 11.5)),
                         ],
                       ),
                     ),
-                    IconButton(
-                      onPressed: () => setState(() => _replyTarget = null),
-                      icon: const Icon(Icons.close_rounded, size: 18),
-                    ),
+                    IconButton(onPressed: () => setState(() => _replyTarget = null), icon: const Icon(Icons.close_rounded, size: 18)),
                   ],
                 ),
               ),
-            _Composer(
-              theme: theme,
-              controller: _textCtrl,
-              onAttach: _openAttachmentSheet,
-              onSend: _sendMessage,
-              onChanged: _handleComposerChanged,
-              onVoice: () async {
-                if (_typingPublished) {
-                  _typingPublished = false;
-                  widget.dataStore.setTyping(widget.conversationId, false);
-                }
-                await _attachments.recordVoiceNote(context);
-                _scrollToBottom();
-              },
+            ListenableBuilder(
+              listenable: appearanceController,
+              builder: (context, _) => PremiumMessageComposer(
+                styleIndex: appearanceController.composerIndex,
+                theme: theme,
+                controller: _textCtrl,
+                onAttach: _openAttachmentSheet,
+                onSend: _sendMessage,
+                onEmoji: _openEmojiPicker,
+                onChanged: _handleComposerChanged,
+                onVoice: () async {
+                  if (_typingPublished) {
+                    _typingPublished = false;
+                    widget.dataStore.setTyping(widget.conversationId, false);
+                  }
+                  await _attachments.recordVoiceNote(context);
+                  _scrollToBottom();
+                },
+              ),
             ),
           ],
         ),
@@ -595,86 +617,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         Expanded(child: chat),
         if (conversationPrefs.sidebarPosition == 'Right') sidebar(),
       ],
-    );
-  }
-}
-
-class _Composer extends StatelessWidget {
-  final ThemeConfig theme;
-  final TextEditingController controller;
-  final VoidCallback onAttach;
-  final VoidCallback onSend;
-  final VoidCallback onVoice;
-  final ValueChanged<String> onChanged;
-
-  const _Composer({
-    required this.theme,
-    required this.controller,
-    required this.onAttach,
-    required this.onSend,
-    required this.onVoice,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(6, 7, 7, 7),
-      decoration: BoxDecoration(
-        color: theme.surfaceColor,
-        border: Border(top: BorderSide(color: theme.cardColor)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            IconButton(
-              tooltip: 'Attach',
-              color: theme.accentColor,
-              onPressed: onAttach,
-              icon: const Icon(Icons.add_circle_outline_rounded),
-            ),
-            Expanded(
-              child: TextField(
-                controller: controller,
-                minLines: 1,
-                maxLines: 5,
-                onChanged: onChanged,
-                style: TextStyle(color: theme.primaryTextColor, fontSize: 14 * theme.fontScale),
-                decoration: InputDecoration(
-                  hintText: 'Message…  /task or #reply',
-                  hintStyle: TextStyle(color: theme.secondaryTextColor),
-                  filled: true,
-                  fillColor: theme.cardColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(22),
-                    borderSide: BorderSide.none,
-                  ),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            ValueListenableBuilder<TextEditingValue>(
-              valueListenable: controller,
-              builder: (context, value, _) {
-                final hasText = value.text.trim().isNotEmpty;
-                return IconButton.filled(
-                  tooltip: hasText ? 'Send' : 'Voice note',
-                  style: IconButton.styleFrom(
-                    backgroundColor: theme.accentColor,
-                    foregroundColor: theme.onAccentColor,
-                  ),
-                  onPressed: hasText ? onSend : onVoice,
-                  icon: Icon(hasText ? Icons.send_rounded : Icons.mic_rounded, size: 19),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
