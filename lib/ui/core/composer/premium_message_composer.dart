@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'package:chat/injection/locator.dart';
 import '../controllers/chaty_preferences_controller.dart';
 import '../theme/theme_config.dart';
 
 class PremiumMessageComposer extends StatelessWidget {
   final int styleIndex;
   final ThemeConfig theme;
-  final ChatyPreferencesController preferencesController;
+  final ChatyPreferencesController? preferencesController;
   final TextEditingController controller;
   final VoidCallback onAttach;
   final VoidCallback onSend;
@@ -18,7 +19,7 @@ class PremiumMessageComposer extends StatelessWidget {
     super.key,
     required this.styleIndex,
     required this.theme,
-    required this.preferencesController,
+    this.preferencesController,
     required this.controller,
     required this.onAttach,
     required this.onSend,
@@ -27,14 +28,15 @@ class PremiumMessageComposer extends StatelessWidget {
     required this.onChanged,
   });
 
+  ChatyPreferencesController get _prefs => preferencesController ?? locator<ChatyPreferencesController>();
   int get _index => styleIndex.clamp(0, 19);
-  Color get _surface => preferencesController.gbColor('BGColor') ?? theme.surfaceColor;
-  Color get _entry => preferencesController.gbColor('ModChatEntry') ?? theme.cardColor;
-  Color get _text => preferencesController.gbColor('ModChatTextColor') ?? theme.primaryTextColor;
-  Color get _attach => preferencesController.gbColor('ModChatBtnColor') ?? theme.accentColor;
-  Color get _emoji => preferencesController.gbColor('ModChatEmojiColor') ?? theme.secondaryTextColor;
-  Color get _sendBackground => preferencesController.gbColor('ModChaSendBKColor') ?? theme.accentColor;
-  Color get _sendForeground => preferencesController.gbColor('ModChaSendColor') ?? theme.onAccentColor;
+  Color get _surface => _prefs.gbColor('BGColor') ?? theme.surfaceColor;
+  Color get _entry => _prefs.gbColor('ModChatEntry') ?? theme.cardColor;
+  Color get _text => _prefs.gbColor('ModChatTextColor') ?? theme.primaryTextColor;
+  Color get _attach => _prefs.gbColor('ModChatBtnColor') ?? theme.accentColor;
+  Color get _emoji => _prefs.gbColor('ModChatEmojiColor') ?? theme.secondaryTextColor;
+  Color get _sendBackground => _prefs.gbColor('ModChaSendBKColor') ?? theme.accentColor;
+  Color get _sendForeground => _prefs.gbColor('ModChaSendColor') ?? theme.onAccentColor;
 
   @override
   Widget build(BuildContext context) {
