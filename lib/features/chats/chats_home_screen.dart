@@ -379,7 +379,7 @@ class _ChatsHomeScreenState extends State<ChatsHomeScreen> {
                               style: TextStyle(
                                 color: theme.primaryTextColor,
                                 fontSize: 15 * theme.fontScale,
-                                fontWeight: conversation.unreadCount > 0 ? FontWeight.w800 : FontWeight.w650,
+                                fontWeight: conversation.unreadCount > 0 ? FontWeight.w800 : FontWeight.w600,
                               ),
                             ),
                           ),
