@@ -105,6 +105,10 @@ class _ChatsHomeScreenState extends State<ChatsHomeScreen> {
     final dataStore = widget.dataStore;
     final homePrefs = widget.preferencesController.home;
     final query = _searchCtrl.text.trim().toLowerCase();
+    final hideFab = widget.preferencesController.gbBool('hide_fab');
+    final fabNormal = widget.preferencesController.gbColor('ModFabNormalColor') ?? theme.accentColor;
+    final fabPressed = widget.preferencesController.gbColor('ModFabPressedColor') ?? fabNormal.withValues(alpha: .78);
+    final fabForeground = widget.preferencesController.gbColor('ModFabTextColor') ?? (fabNormal.computeLuminance() > .5 ? Colors.black : Colors.white);
 
     final conversations = dataStore.conversations.where((conversation) {
       final matchesQuery = query.isEmpty ||
@@ -286,22 +290,25 @@ class _ChatsHomeScreenState extends State<ChatsHomeScreen> {
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: theme.accentColor,
-        foregroundColor: theme.onAccentColor,
-        onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => NewChatScreen(
-                theme: theme,
-                dataStore: dataStore,
-                preferencesController: widget.preferencesController,
-              ),
+      floatingActionButton: hideFab
+          ? null
+          : FloatingActionButton(
+              backgroundColor: fabNormal,
+              foregroundColor: fabForeground,
+              splashColor: fabPressed,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => NewChatScreen(
+                      theme: theme,
+                      dataStore: dataStore,
+                      preferencesController: widget.preferencesController,
+                    ),
+                  ),
+                );
+              },
+              child: const Icon(Icons.edit_rounded),
             ),
-          );
-        },
-        child: const Icon(Icons.edit_rounded),
-      ),
     );
   }
 
