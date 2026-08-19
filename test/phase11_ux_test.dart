@@ -18,7 +18,11 @@ void main() {
       ),
     );
 
-    final size = tester.getSize(find.byType(ChatyTouchTarget));
+    final target = find.descendant(
+      of: find.byType(ChatyTouchTarget),
+      matching: find.byType(ConstrainedBox),
+    ).first;
+    final size = tester.getSize(target);
     expect(size.width, greaterThanOrEqualTo(ChatyUx.minTouchTarget));
     expect(size.height, greaterThanOrEqualTo(ChatyUx.minTouchTarget));
   });
@@ -39,10 +43,16 @@ void main() {
       ),
     );
 
-    expect(tester.getSize(find.byType(ChatyResponsiveContent)).width, lessThanOrEqualTo(ChatyUx.readableContentWidth));
+    final constrained = find.descendant(
+      of: find.byType(ChatyResponsiveContent),
+      matching: find.byType(ConstrainedBox),
+    ).first;
+    expect(tester.getSize(constrained).width, lessThanOrEqualTo(ChatyUx.readableContentWidth));
   });
 
   testWidgets('state views expose a live semantic announcement', (tester) async {
+    final handle = tester.ensureSemantics();
+    addTearDown(handle.dispose);
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -54,9 +64,7 @@ void main() {
         ),
       ),
     );
-    final semantics = tester.getSemantics(find.byType(ChatyStateView));
-    expect(semantics.label, contains('Unable to load'));
-    expect(semantics.label, contains('Try again'));
+    expect(find.bySemanticsLabel('Unable to load. Try again.'), findsOneWidget);
   });
 
   test('app propagates reduced-motion and suppresses decorative particles', () {
