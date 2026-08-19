@@ -74,15 +74,10 @@ class StatusService {
       _ => FileType.any,
     };
 
-    final result = await FilePicker().pickFiles(
-      type: fileType,
-      allowMultiple: false,
-      withData: false,
-      withReadStream: false,
-    );
-    if (result == null || result.files.isEmpty) return null;
+    final files = await FilePicker.pickFiles(type: fileType);
+    if (files.isEmpty) return null;
 
-    final picked = result.files.single;
+    final picked = files.single;
     final path = picked.path;
     if (path == null || path.isEmpty) {
       throw Exception('The selected file is not accessible on this device.');
