@@ -56,46 +56,134 @@ class PremiumMessageBubble extends StatelessWidget {
 
   String _semanticLabel() {
     final sender = isMe ? 'You' : (senderName ?? 'Contact');
-    final parts = <String>[
+    return <String>[
       '$sender, ${_time(message.createdAt)}',
       if (message.replyToMessageId != null) 'replying to ${message.replyToSenderName ?? 'a message'}',
-      if (message.type == MessageType.taskCard) 'task: ${message.text}' else if (message.text.isNotEmpty) message.text,
+      if (message.type == MessageType.taskCard)
+        'task: ${message.text}'
+      else if (message.text.isNotEmpty)
+        message.text,
       if (message.attachment != null) '${message.attachment!.type} attachment ${message.attachment!.name}',
       if (message.isPinned) 'pinned',
       if (message.isStarred) 'starred',
       if (isMe) _deliveryLabel(),
       if (message.reactions.isNotEmpty) '${message.reactions.length} reactions',
-    ];
-    return parts.join('. ');
+    ].join('. ');
   }
 
   Widget _delivery(MessagePresentationStyle style) {
-    final normalized = style.tickStyle.toLowerCase();
+    final normalized = style.tickStyle.trim().toLowerCase();
     final readColor = preferencesController.gbColor('ModOnlineColor') ?? const Color(0xFF38BDF8);
     final base = isMe ? style.outgoingTime : style.incomingTime;
+
     if (message.deliveryState == DeliveryState.failed) {
       return const Icon(Icons.error_outline_rounded, size: 13, color: Colors.redAccent);
     }
     if (message.deliveryState == DeliveryState.queued || message.deliveryState == DeliveryState.sending) {
       return Icon(Icons.schedule_rounded, size: 13, color: base);
     }
-    final isRead = message.deliveryState == DeliveryState.read;
-    final color = isRead ? readColor : base;
-    if (normalized.contains('minimal')) {
-      return Container(width: 7, height: 7, decoration: BoxDecoration(shape: BoxShape.circle, color: color));
+
+    final read = message.deliveryState == DeliveryState.read;
+    final delivered = message.deliveryState == DeliveryState.delivered || read;
+    final accent = read ? readColor : base;
+    final single = Icon(Icons.done_rounded, size: 14, color: accent);
+    final double = Icon(Icons.done_all_rounded, size: 15, color: accent);
+
+    switch (normalized) {
+      case 'double check':
+        return delivered ? double : single;
+      case 'ios circle':
+      case 'ios style':
+      case 'ios':
+        return Icon(read ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded, size: 15, color: accent);
+      case 'minimal dot':
+      case 'minimal':
+        return Container(width: 7, height: 7, decoration: BoxDecoration(shape: BoxShape.circle, color: accent));
+      case 'neon':
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+          decoration: BoxDecoration(border: Border.all(color: accent), borderRadius: BorderRadius.circular(6)),
+          child: Icon(Icons.done_all_rounded, size: 11, color: accent),
+        );
+      case 'single check':
+        return Icon(Icons.check_rounded, size: 15, color: accent);
+      case 'bold double':
+        return Icon(delivered ? Icons.done_all_rounded : Icons.done_rounded, size: 17, color: accent);
+      case 'rounded double':
+        return Container(
+          width: 19,
+          height: 19,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: accent.withValues(alpha: .14)),
+          child: Icon(delivered ? Icons.done_all_rounded : Icons.done_rounded, size: 13, color: accent),
+        );
+      case 'square':
+        return Container(
+          width: 18,
+          height: 18,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(border: Border.all(color: accent), borderRadius: BorderRadius.circular(3)),
+          child: Icon(delivered ? Icons.done_all_rounded : Icons.done_rounded, size: 12, color: accent),
+        );
+      case 'pill':
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+          decoration: BoxDecoration(color: accent.withValues(alpha: .13), borderRadius: BorderRadius.circular(10)),
+          child: Icon(delivered ? Icons.done_all_rounded : Icons.done_rounded, size: 12, color: accent),
+        );
+      case 'outline':
+        return Container(
+          width: 17,
+          height: 17,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: accent)),
+          child: Icon(Icons.check_rounded, size: 11, color: accent),
+        );
+      case 'filled':
+        return Container(
+          width: 17,
+          height: 17,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: accent),
+          child: const Icon(Icons.check_rounded, size: 11, color: Colors.white),
+        );
+      case 'tiny':
+        return Icon(delivered ? Icons.done_all_rounded : Icons.done_rounded, size: 11, color: accent);
+      case 'wide':
+        return SizedBox(
+          width: 23,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Icon(delivered ? Icons.done_all_rounded : Icons.done_rounded, size: 16, color: accent),
+          ),
+        );
+      case 'accent':
+        return Icon(delivered ? Icons.done_all_rounded : Icons.done_rounded, size: 15, color: readColor);
+      case 'monochrome':
+        return Icon(delivered ? Icons.done_all_rounded : Icons.done_rounded, size: 15, color: base);
+      case 'soft':
+        return Icon(delivered ? Icons.done_all_rounded : Icons.done_rounded, size: 15, color: accent.withValues(alpha: .62));
+      case 'workspace':
+        return Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: .08),
+            border: Border.all(color: accent.withValues(alpha: .35)),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Icon(delivered ? Icons.done_all_rounded : Icons.done_rounded, size: 12, color: accent),
+        );
+      case 'focus':
+        return Container(
+          width: 14,
+          height: 3,
+          decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(2)),
+        );
+      case 'classic':
+      case 'default':
+      default:
+        return delivered ? double : single;
     }
-    if (normalized.contains('ios')) {
-      return Icon(isRead ? Icons.check_circle_rounded : Icons.check_circle_outline_rounded, size: 14, color: color);
-    }
-    if (normalized.contains('neon')) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
-        decoration: BoxDecoration(border: Border.all(color: color), borderRadius: BorderRadius.circular(6)),
-        child: Icon(Icons.done_all_rounded, size: 11, color: color),
-      );
-    }
-    if (message.deliveryState == DeliveryState.sent) return Icon(Icons.done_rounded, size: 14, color: color);
-    return Icon(Icons.done_all_rounded, size: 15, color: color);
   }
 
   @override
@@ -263,12 +351,9 @@ class PremiumMessageBubble extends StatelessWidget {
                                 if (isMe) ...[
                                   const SizedBox(width: 4),
                                   AnimatedSwitcher(
-                                    duration: ChatyUx.motionDuration(
-                                      context,
-                                      standard: const Duration(milliseconds: 160),
-                                    ),
+                                    duration: ChatyUx.motionDuration(context, standard: const Duration(milliseconds: 160)),
                                     child: KeyedSubtree(
-                                      key: ValueKey(message.deliveryState),
+                                      key: ValueKey('${message.deliveryState}-${style.tickStyle}'),
                                       child: _delivery(style),
                                     ),
                                   ),
@@ -337,10 +422,7 @@ class PremiumMessageBubble extends StatelessWidget {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(message.text, style: TextStyle(color: textColor, fontWeight: FontWeight.w800)),
-                Text(
-                  'Linked task • Tap to open',
-                  style: TextStyle(color: textColor.withValues(alpha: .7), fontSize: 10.5),
-                ),
+                Text('Linked task • Tap to open', style: TextStyle(color: textColor.withValues(alpha: .7), fontSize: 10.5)),
               ]),
             ),
           ]),
@@ -371,10 +453,7 @@ class PremiumMessageBubble extends StatelessWidget {
       return Container(
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: theme.cardColor.withValues(alpha: .4),
-          borderRadius: BorderRadius.circular(10),
-        ),
+        decoration: BoxDecoration(color: theme.cardColor.withValues(alpha: .4), borderRadius: BorderRadius.circular(10)),
         child: Row(children: [
           Icon(Icons.play_circle_fill_rounded, color: theme.accentColor, size: 28),
           const SizedBox(width: 8),
@@ -390,10 +469,7 @@ class PremiumMessageBubble extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       padding: const EdgeInsets.all(9),
-      decoration: BoxDecoration(
-        color: theme.cardColor.withValues(alpha: .4),
-        borderRadius: BorderRadius.circular(10),
-      ),
+      decoration: BoxDecoration(color: theme.cardColor.withValues(alpha: .4), borderRadius: BorderRadius.circular(10)),
       child: Row(children: [
         Icon(Icons.insert_drive_file_rounded, color: theme.accentColor, size: 22),
         const SizedBox(width: 8),
@@ -412,8 +488,8 @@ class PremiumMessageBubble extends StatelessWidget {
   }
 
   String _initials(String value) {
-    final parts = value.trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList(growable: false);
+    final parts = value.trim().split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList(growable: false);
     if (parts.isEmpty) return 'CH';
-    return parts.take(2).map((e) => e[0]).join().toUpperCase();
+    return parts.take(2).map((part) => part[0]).join().toUpperCase();
   }
 }
