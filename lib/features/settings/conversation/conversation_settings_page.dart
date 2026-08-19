@@ -16,49 +16,11 @@ class ConversationSettingsPage extends StatefulWidget {
 
 class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
   static const List<String> _bubbleShapes = <String>[
-    'Rounded',
-    'Classic Tail',
-    'Tail-less',
-    'Compact',
-    'Squircle',
-    'Card',
-    'Pill',
-    'Minimal',
-    'Sharp',
-    'Soft',
-    'Wide',
-    'Narrow',
-    'Dense',
-    'Airy',
-    'Editorial',
-    'Workspace',
-    'Focus',
-    'Offset Tail',
-    'Flat',
-    'Elevated',
+    'Rounded','Classic Tail','Tail-less','Compact','Squircle','Card','Pill','Minimal','Sharp','Soft','Wide','Narrow','Dense','Airy','Editorial','Workspace','Focus','Offset Tail','Flat','Elevated',
   ];
 
   static const List<String> _tickStyles = <String>[
-    'Default',
-    'Double Check',
-    'iOS Circle',
-    'Minimal Dot',
-    'Neon',
-    'Single Check',
-    'Bold Double',
-    'Rounded Double',
-    'Square',
-    'Pill',
-    'Outline',
-    'Filled',
-    'Tiny',
-    'Wide',
-    'Accent',
-    'Monochrome',
-    'Soft',
-    'Workspace',
-    'Focus',
-    'Classic',
+    'Default','Double Check','iOS Circle','Minimal Dot','Neon','Single Check','Bold Double','Rounded Double','Square','Pill','Outline','Filled','Tiny','Wide','Accent','Monochrome','Soft','Workspace','Focus','Classic',
   ];
 
   static const List<String> _reactionEmojis = ['❤️', '👍', '🔥', '😂', '😮', '🙏'];
@@ -83,27 +45,18 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                '$bubbleStyle • $tickStyle • ${conv.bubbleRadius.toInt()}px radius',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              Text('$bubbleStyle • $tickStyle • ${conv.bubbleRadius.toInt()}px radius', style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        padding: EdgeInsets.all(conv.bubblePadding),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(conv.bubbleRadius),
-                        ),
-                        child: const Text('Incoming message preview', style: TextStyle(fontSize: 13)),
-                      ),
-                    ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  padding: EdgeInsets.all(conv.bubblePadding),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(conv.bubbleRadius),
                   ),
-                ],
+                  child: const Text('Incoming message preview', style: TextStyle(fontSize: 13)),
+                ),
               ),
               const SizedBox(height: 8),
               Align(
@@ -136,9 +89,9 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
               options: _bubbleShapes,
               selectedOption: bubbleStyle,
               optionLabel: (value) => value,
-              onSelected: (shape) async {
-                await controller.updateConversation(conv.copyWith(bubbleShape: shape), logTitle: 'Bubble Template');
-                await controller.updateGbFeature('bubble_style', shape);
+              onSelected: (shape) {
+                controller.updateConversation(conv.copyWith(bubbleShape: shape), logTitle: 'Bubble Template');
+                controller.updateGbFeature('bubble_style', shape);
               },
             ),
             ChatySliderTile(
@@ -159,9 +112,9 @@ class _ConversationSettingsPageState extends State<ConversationSettingsPage> {
               options: _tickStyles,
               selectedOption: tickStyle,
               optionLabel: (value) => value,
-              onSelected: (tick) async {
-                await controller.updateConversation(conv.copyWith(tickStyle: tick), logTitle: 'Tick Template');
-                await controller.updateGbFeature('tick_style', tick);
+              onSelected: (tick) {
+                controller.updateConversation(conv.copyWith(tickStyle: tick), logTitle: 'Tick Template');
+                controller.updateGbFeature('tick_style', tick);
               },
             ),
           ],
