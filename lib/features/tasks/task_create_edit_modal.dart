@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../ui/core/theme/theme_config.dart';
+import '../../ui/core/theme/theme_config.dart';
 import '../../data/repositories/mock_data_store.dart';
 import '../../domain/models/chat_task.dart';
 import '../../domain/models/conversation.dart';
