@@ -6,7 +6,6 @@ enum MessageType {
   document,
   location,
   contact,
-  poll,
   taskCard,
   system,
 }
