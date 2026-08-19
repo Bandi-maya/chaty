@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../ui/core/theme/theme_config.dart';
+import '../../ui/core/theme/theme_config.dart';
 import '../../data/repositories/mock_data_store.dart';
 import '../../data/services/status_service.dart';
 import '../../ui/core/controllers/chaty_preferences_controller.dart';
 import '../../ui/core/widgets/app_avatar.dart';
 import '../../injection/locator.dart';
-import '../../../ui/core/theme/theme_controller.dart';
+import '../../ui/core/theme/theme_controller.dart';
 
 class UpdatesScreen extends StatefulWidget {
   final ThemeConfig theme;
