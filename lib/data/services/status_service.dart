@@ -20,6 +20,9 @@ class StatusRecord {
   final DateTime createdAt;
   final DateTime expiresAt;
   final DateTime? deletedAt;
+  final String displayName;
+  final String avatarInitials;
+  final String avatarColorHex;
 
   const StatusRecord({
     required this.id,
@@ -33,10 +36,36 @@ class StatusRecord {
     required this.createdAt,
     required this.expiresAt,
     required this.deletedAt,
+    this.displayName = '',
+    this.avatarInitials = '',
+    this.avatarColorHex = '0xFF6366F1',
   });
 
   bool get hasMedia => mediaPath != null && mediaPath!.isNotEmpty;
   bool get isDeleted => deletedAt != null;
+
+  StatusRecord copyWithOwner({
+    required String displayName,
+    required String avatarInitials,
+    required String avatarColorHex,
+  }) {
+    return StatusRecord(
+      id: id,
+      userId: userId,
+      text: text,
+      mediaType: mediaType,
+      mediaPath: mediaPath,
+      mediaName: mediaName,
+      mediaSize: mediaSize,
+      durationSeconds: durationSeconds,
+      createdAt: createdAt,
+      expiresAt: expiresAt,
+      deletedAt: deletedAt,
+      displayName: displayName,
+      avatarInitials: avatarInitials,
+      avatarColorHex: avatarColorHex,
+    );
+  }
 }
 
 class StatusService {
@@ -49,20 +78,57 @@ class StatusService {
   final SupabaseClient _client;
   final ChatyPreferencesController _preferences;
   final Uuid _uuid = const Uuid();
+  final Map<String, Map<String, String>> _ownerCache = <String, Map<String, String>>{};
 
   Stream<List<StatusRecord>> watchActiveStatuses() {
     return _client
         .from('status_updates')
         .stream(primaryKey: const <String>['id'])
         .order('created_at', ascending: false)
-        .map((rows) {
+        .asyncMap((rows) async {
       final now = DateTime.now();
-      final keepDeleted = _preferences.privacy.antiDeleteStatus || _preferences.gbBool('yoAntiRevokeStatus');
-      return rows
+      final keepDeleted = _preferences.privacy.antiDeleteStatus ||
+          _preferences.gbBool('yoAntiRevokeStatus');
+      final statuses = rows
           .map((row) => _fromRow(Map<String, dynamic>.from(row)))
           .where((status) => status.expiresAt.isAfter(now) && (!status.isDeleted || keepDeleted))
           .toList(growable: false);
+      await _hydrateOwners(statuses.map((status) => status.userId).toSet());
+      return statuses
+          .map((status) {
+            final owner = _ownerCache[status.userId];
+            if (owner == null) return status;
+            return status.copyWithOwner(
+              displayName: owner['display_name'] ?? '',
+              avatarInitials: owner['avatar_initials'] ?? '',
+              avatarColorHex: owner['avatar_color_hex'] ?? '0xFF6366F1',
+            );
+          })
+          .toList(growable: false);
     });
+  }
+
+  Future<void> _hydrateOwners(Set<String> userIds) async {
+    final missing = userIds.where((id) => id.isNotEmpty && !_ownerCache.containsKey(id)).toList(growable: false);
+    if (missing.isEmpty) return;
+    try {
+      final rows = await _client
+          .from('profiles')
+          .select('id,display_name,avatar_initials,avatar_color_hex')
+          .inFilter('id', missing);
+      for (final raw in rows) {
+        final row = Map<String, dynamic>.from(raw);
+        final id = row['id']?.toString() ?? '';
+        if (id.isEmpty) continue;
+        _ownerCache[id] = <String, String>{
+          'display_name': row['display_name']?.toString() ?? '',
+          'avatar_initials': row['avatar_initials']?.toString() ?? '',
+          'avatar_color_hex': row['avatar_color_hex']?.toString() ?? '0xFF6366F1',
+        };
+      }
+    } catch (_) {
+      // Keep the status usable even if profile enrichment is temporarily unavailable.
+    }
   }
 
   Future<StatusRecord> publishText(String text) async {
@@ -73,7 +139,7 @@ class StatusService {
 
   Future<StatusRecord?> pickAndPublish({required String mediaType, String text = ''}) async {
     if (mediaType == 'audio' && !_preferences.gbBool('abu9aleh_status_audio')) {
-      throw Exception('Enable Audio Status in GB Feature Center first.');
+      throw Exception('Enable Audio Status in Settings → Status & stories first.');
     }
 
     final fileType = switch (mediaType) {
@@ -141,9 +207,6 @@ class StatusService {
     final user = _client.auth.currentUser;
     if (user == null || user.id != status.userId) throw Exception('You can only delete your own status.');
     await _client.rpc('delete_status_update', params: <String, dynamic>{'p_status_id': status.id});
-    // Media is retained until status expiry so anti-delete viewers can still
-    // access the original signed object. Storage cleanup can safely happen
-    // after the status expiry window.
   }
 
   Future<StatusRecord> _insert({
@@ -169,7 +232,16 @@ class StatusService {
       'duration_seconds': durationSeconds,
       'expires_at': now.add(const Duration(hours: 24)).toIso8601String(),
     }).select().single();
-    return _fromRow(Map<String, dynamic>.from(row));
+    final created = _fromRow(Map<String, dynamic>.from(row));
+    await _hydrateOwners(<String>{created.userId});
+    final owner = _ownerCache[created.userId];
+    return owner == null
+        ? created
+        : created.copyWithOwner(
+            displayName: owner['display_name'] ?? '',
+            avatarInitials: owner['avatar_initials'] ?? '',
+            avatarColorHex: owner['avatar_color_hex'] ?? '0xFF6366F1',
+          );
   }
 
   static StatusRecord _fromRow(Map<String, dynamic> row) {
@@ -180,7 +252,9 @@ class StatusService {
       mediaType: row['media_type']?.toString() ?? 'text',
       mediaPath: row['media_path']?.toString(),
       mediaName: row['media_name']?.toString(),
-      mediaSize: row['media_size'] is num ? (row['media_size'] as num).round() : int.tryParse(row['media_size']?.toString() ?? '') ?? 0,
+      mediaSize: row['media_size'] is num
+          ? (row['media_size'] as num).round()
+          : int.tryParse(row['media_size']?.toString() ?? '') ?? 0,
       durationSeconds: row['duration_seconds'] is num ? (row['duration_seconds'] as num).round() : 0,
       createdAt: DateTime.tryParse(row['created_at']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
       expiresAt: DateTime.tryParse(row['expires_at']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
