@@ -41,9 +41,20 @@ class ChatyPreferencesController extends ChangeNotifier {
 
   ChatyPreferencesController() {
     _init();
-    _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((state) {
-      if (state.session != null) unawaited(_syncFromRemote());
-    });
+    final client = _clientOrNull();
+    if (client != null) {
+      _authSubscription = client.auth.onAuthStateChange.listen((state) {
+        if (state.session != null) unawaited(_syncFromRemote());
+      });
+    }
+  }
+
+  SupabaseClient? _clientOrNull() {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
   }
 
   PrivacyPreferences get privacy => _privacy;
@@ -140,14 +151,18 @@ class ChatyPreferencesController extends ChangeNotifier {
     final snapshot = _snapshot();
     unawaited(LocalPreferencesStorage.savePreferences(snapshot));
     _remoteSyncDebounce?.cancel();
-    _remoteSyncDebounce = Timer(const Duration(milliseconds: 650), () => unawaited(_pushRemote(snapshot)));
+    if (_clientOrNull() != null) {
+      _remoteSyncDebounce = Timer(const Duration(milliseconds: 650), () => unawaited(_pushRemote(snapshot)));
+    }
   }
 
   Future<void> _syncFromRemote() async {
-    final user = Supabase.instance.client.auth.currentUser;
+    final client = _clientOrNull();
+    if (client == null) return;
+    final user = client.auth.currentUser;
     if (user == null) return;
     try {
-      final row = await Supabase.instance.client.from('user_feature_settings').select('settings').eq('user_id', user.id).maybeSingle();
+      final row = await client.from('user_feature_settings').select('settings').eq('user_id', user.id).maybeSingle();
       if (row == null || row['settings'] is! Map) {
         await _pushRemote(_snapshot());
         return;
@@ -162,10 +177,12 @@ class ChatyPreferencesController extends ChangeNotifier {
   }
 
   Future<void> _pushRemote(Map<String, dynamic> snapshot) async {
-    final user = Supabase.instance.client.auth.currentUser;
+    final client = _clientOrNull();
+    if (client == null) return;
+    final user = client.auth.currentUser;
     if (user == null) return;
     try {
-      await Supabase.instance.client.from('user_feature_settings').upsert(<String, dynamic>{
+      await client.from('user_feature_settings').upsert(<String, dynamic>{
         'user_id': user.id,
         'settings': snapshot,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
@@ -199,7 +216,15 @@ class ChatyPreferencesController extends ChangeNotifier {
     if (key == 'my_name') { _home = _home.copyWith(myNameOverride: text); return; }
     if (key == 'yo_want_ghostmode') {
       _home = _home.copyWith(ghostMode: flag);
-      if (flag) _privacy = _privacy.copyWith(freezeLastSeen: true, readReceipts: false, typingIndicators: false, recordingIndicators: false, hideViewStatus: true);
+      if (flag) {
+        _privacy = _privacy.copyWith(
+          freezeLastSeen: true,
+          readReceipts: false,
+          typingIndicators: false,
+          recordingIndicators: false,
+          hideViewStatus: true,
+        );
+      }
       return;
     }
     if (key == 'yo_want_airplanemode') { _home = _home.copyWith(airplaneModeSimulator: flag); return; }
@@ -237,7 +262,9 @@ class ChatyPreferencesController extends ChangeNotifier {
   void updateGbFeatures(Map<String, Object?> values, {String logTitle = 'GB feature bundle'}) {
     final previous = <String, Object?>{..._gbFeatures};
     _gbFeatures = <String, Object?>{..._gbFeatures, ...values};
-    for (final entry in values.entries) _applyGbSemanticAlias(entry.key, entry.value);
+    for (final entry in values.entries) {
+      _applyGbSemanticAlias(entry.key, entry.value);
+    }
     _logHistory('gb:bundle', logTitle, previous, values);
     _persist();
     notifyListeners();
