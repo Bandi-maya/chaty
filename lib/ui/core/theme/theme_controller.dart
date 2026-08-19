@@ -3,18 +3,21 @@ import 'theme_config.dart';
 import 'theme_presets.dart';
 
 class ThemeController extends ChangeNotifier {
-  ThemeConfig _globalTheme = ThemePresets.getSystemDefaultTheme();
+  static const double _defaultFontScale = 1.06;
+  static const double _defaultDensity = 1.04;
+
+  ThemeConfig _globalTheme = ThemePresets.getSystemDefaultTheme().copyWith(
+    fontScale: _defaultFontScale,
+    density: _defaultDensity,
+  );
   ThemeConfig? _runtimeThemeOverride;
   final Map<String, ThemeConfig> _perChatThemes = {};
   UILayoutMode _layoutMode = UILayoutMode.classic;
   AppNavigationMode _navigationMode = AppNavigationMode.bottomNav;
   bool _useReducedMotion = false;
-  double _fontScale = 1.0;
-  double _density = 1.0;
+  double _fontScale = _defaultFontScale;
+  double _density = _defaultDensity;
 
-  /// Theme currently consumed by runtime widgets. Phase 8 allows GB/advanced
-  /// semantic overrides to sit on top of the selected base theme without
-  /// destructively rewriting the user's actual theme selection.
   ThemeConfig get globalTheme => _runtimeThemeOverride ?? _globalTheme;
   ThemeConfig get baseTheme => _globalTheme;
   UILayoutMode get layoutMode => _layoutMode;
@@ -27,9 +30,6 @@ class ThemeController extends ChangeNotifier {
     return _perChatThemes[conversationId] ?? globalTheme;
   }
 
-  /// Applies a transient resolved theme used by widgets that consume
-  /// [globalTheme]. This intentionally does not notify listeners because the
-  /// caller already rebuilds from the preferences/theme listenable pair.
   void setRuntimeThemeOverride(ThemeConfig? resolvedTheme) {
     _runtimeThemeOverride = resolvedTheme;
   }
@@ -48,7 +48,11 @@ class ThemeController extends ChangeNotifier {
 
   void updateThemeConfig(ThemeConfig customConfig) {
     _runtimeThemeOverride = null;
-    _globalTheme = customConfig;
+    _globalTheme = customConfig.copyWith(
+      fontScale: _fontScale,
+      density: _density,
+      animationLevel: _useReducedMotion ? 0.0 : customConfig.animationLevel,
+    );
     notifyListeners();
   }
 
@@ -100,12 +104,10 @@ class ThemeController extends ChangeNotifier {
     final selected = _globalTheme;
     final currentId = selected.id.toLowerCase();
 
-    // Check if there is an exact registered preset counterpart.
     if (currentId.contains('dark') || currentId.contains('light')) {
       final targetId = currentId.contains('dark')
           ? currentId.replaceAll('dark', 'light')
           : currentId.replaceAll('light', 'dark');
-
       final match = ThemePresets.all.where((p) => p.id.toLowerCase() == targetId).firstOrNull;
       if (match != null) {
         setGlobalTheme(match);
@@ -113,12 +115,9 @@ class ThemeController extends ChangeNotifier {
       }
     }
 
-    // For any custom or arbitrary theme, dynamically adapt colors.
     setGlobalTheme(selected.toggleBrightness());
   }
 
-  /// Keeps the system-default monochrome pair in sync with Android/iOS system
-  /// appearance while leaving explicit/custom theme choices untouched.
   void applyPlatformBrightness(Brightness brightness) {
     final id = _globalTheme.id.toLowerCase();
     if (id == 'monochrome_dark' || id == 'monochrome_light') {
@@ -128,13 +127,16 @@ class ThemeController extends ChangeNotifier {
 
   void resetToDefaults() {
     _runtimeThemeOverride = null;
-    _globalTheme = ThemePresets.getSystemDefaultTheme();
+    _globalTheme = ThemePresets.getSystemDefaultTheme().copyWith(
+      fontScale: _defaultFontScale,
+      density: _defaultDensity,
+    );
     _perChatThemes.clear();
     _layoutMode = UILayoutMode.classic;
     _navigationMode = AppNavigationMode.bottomNav;
     _useReducedMotion = false;
-    _fontScale = 1.0;
-    _density = 1.0;
+    _fontScale = _defaultFontScale;
+    _density = _defaultDensity;
     notifyListeners();
   }
 }
