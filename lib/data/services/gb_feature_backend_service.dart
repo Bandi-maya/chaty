@@ -91,6 +91,15 @@ class GbFeatureBackendService {
     await _client.from('auto_reply_rules').delete().eq('id', ruleId).eq('user_id', _userId);
   }
 
+  Future<void> deleteAutoReplyRuleBySignature(String keyword, String response) async {
+    await _client
+        .from('auto_reply_rules')
+        .delete()
+        .eq('user_id', _userId)
+        .ilike('keyword', keyword.trim())
+        .eq('response_body', response.trim());
+  }
+
   Future<String> scheduleMessage({required String conversationId, required String body, required DateTime scheduledAt}) async {
     final raw = await _client.rpc('schedule_message', params: <String, dynamic>{
       'p_conversation_id': conversationId,
@@ -137,6 +146,16 @@ class GbFeatureBackendService {
       'updated_at': DateTime.now().toUtc().toIso8601String(),
     }, onConflict: 'user_id,shortcut').select('id').single();
     return row['id'].toString();
+  }
+
+  Future<void> deleteQuickReply(String shortcut) async {
+    await _client.from('quick_reply_templates').delete().eq('user_id', _userId).eq('shortcut', shortcut.trim());
+  }
+
+  Future<List<Map<String, dynamic>>> getBlockedUsers() async {
+    final raw = await _client.rpc('get_my_blocked_users');
+    if (raw is! List) return <Map<String, dynamic>>[];
+    return raw.whereType<Map>().map((row) => Map<String, dynamic>.from(row)).toList(growable: false);
   }
 
   Future<void> blockUser(String userId) async {
