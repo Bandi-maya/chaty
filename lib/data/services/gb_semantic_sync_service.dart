@@ -137,15 +137,12 @@ class GbSemanticSyncService {
 
       final auth = Supabase.instance.client.auth.currentUser;
       if (auth != null) {
-        final shouldBeOffline = home.ghostMode || home.airplaneModeSimulator;
-        final alwaysOnline = _preferences.gbBool('always_online');
-        await _backend.setPresence(
-          shouldBeOffline
-              ? PresenceState.offline
-              : alwaysOnline
-                  ? PresenceState.online
-                  : PresenceState.online,
-        );
+        if (home.ghostMode || home.airplaneModeSimulator) {
+          await _backend.setPresence(PresenceState.offline);
+        } else if (_preferences.gbBool('always_online')) {
+          await _backend.setPresence(PresenceState.online);
+        }
+        // Normal presence continues to be owned by the app lifecycle observer.
       }
     } catch (_) {
       // Persistence already retains the desired state. Runtime synchronization
