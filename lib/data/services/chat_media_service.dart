@@ -28,15 +28,11 @@ class ChatMediaService {
       _ => FileType.any,
     };
 
-    final result = await FilePicker.platform.pickFiles(
-      type: pickerType,
-      allowMultiple: false,
-      withData: false,
-      withReadStream: false,
-    );
-    if (result == null || result.files.isEmpty) return null;
+    // file_picker 12 uses the federated static API. pickFile() is the
+    // single-file path and returns null when the user cancels.
+    final picked = await FilePicker.pickFile(type: pickerType);
+    if (picked == null) return null;
 
-    final picked = result.files.single;
     final sourcePath = picked.path;
     if (sourcePath == null || sourcePath.isEmpty) {
       throw Exception('The selected file is not accessible on this device.');
