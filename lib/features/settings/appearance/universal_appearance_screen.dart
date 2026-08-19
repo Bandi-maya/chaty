@@ -59,6 +59,14 @@ class UniversalAppearanceScreen extends StatelessWidget {
                   onSelected: controller.setBottomBarStyle,
                 ),
                 _VariantSection(
+                  title: 'Message composer style',
+                  subtitle: '20 distinct input/composer layouts with attachment, emoji, voice and send behavior preserved.',
+                  value: controller.composerStyle,
+                  options: AppearanceVariantController.composerStyles,
+                  icon: Icons.edit_note_rounded,
+                  onSelected: controller.setComposerStyle,
+                ),
+                _VariantSection(
                   title: 'App icon language',
                   subtitle: '20 in-app icon identities used by appearance previews and branded surfaces.',
                   value: controller.appIconStyle,
@@ -189,7 +197,7 @@ class _AppearancePreview extends StatelessWidget {
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
+                children: const [
                   _PreviewNavIcon(icon: Icons.chat_bubble_rounded, selected: true),
                   _PreviewNavIcon(icon: Icons.update_rounded),
                   _PreviewNavIcon(icon: Icons.checklist_rounded),
@@ -202,7 +210,7 @@ class _AppearancePreview extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
             child: Text(
-              'Navigation: ${controller.navigationStyle}\nEntry: ${controller.entryAnimation}   Exit: ${controller.exitAnimation}',
+              'Navigation: ${controller.navigationStyle}\nComposer: ${controller.composerStyle}\nEntry: ${controller.entryAnimation}   Exit: ${controller.exitAnimation}',
               style: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant, height: 1.45),
             ),
           ),
@@ -214,26 +222,7 @@ class _AppearancePreview extends StatelessWidget {
   IconData _appIcon(String style) {
     final index = AppearanceVariantController.appIconStyles.indexOf(style);
     const icons = <IconData>[
-      Icons.chat_bubble_rounded,
-      Icons.chat_bubble_outline_rounded,
-      Icons.forum_rounded,
-      Icons.message_rounded,
-      Icons.mark_chat_unread_rounded,
-      Icons.contrast_rounded,
-      Icons.visibility_rounded,
-      Icons.chat_rounded,
-      Icons.sms_rounded,
-      Icons.send_rounded,
-      Icons.forum_outlined,
-      Icons.question_answer_rounded,
-      Icons.waves_rounded,
-      Icons.bolt_rounded,
-      Icons.blur_circular_rounded,
-      Icons.grid_view_rounded,
-      Icons.workspaces_rounded,
-      Icons.auto_awesome_rounded,
-      Icons.lock_rounded,
-      Icons.center_focus_strong_rounded,
+      Icons.chat_bubble_rounded,Icons.chat_bubble_outline_rounded,Icons.forum_rounded,Icons.message_rounded,Icons.mark_chat_unread_rounded,Icons.contrast_rounded,Icons.visibility_rounded,Icons.chat_rounded,Icons.sms_rounded,Icons.send_rounded,Icons.forum_outlined,Icons.question_answer_rounded,Icons.waves_rounded,Icons.bolt_rounded,Icons.blur_circular_rounded,Icons.grid_view_rounded,Icons.workspaces_rounded,Icons.auto_awesome_rounded,Icons.lock_rounded,Icons.center_focus_strong_rounded,
     ];
     return icons[index < 0 ? 0 : index];
   }
@@ -241,26 +230,7 @@ class _AppearancePreview extends StatelessWidget {
   IconData _notificationIcon(String style) {
     final index = AppearanceVariantController.notificationIconStyles.indexOf(style);
     const icons = <IconData>[
-      Icons.chat_bubble_rounded,
-      Icons.chat_bubble_outline_rounded,
-      Icons.done_all_rounded,
-      Icons.notifications_active_rounded,
-      Icons.mark_unread_chat_alt_rounded,
-      Icons.circle_notifications_rounded,
-      Icons.priority_high_rounded,
-      Icons.account_circle_rounded,
-      Icons.groups_rounded,
-      Icons.task_alt_rounded,
-      Icons.call_rounded,
-      Icons.videocam_rounded,
-      Icons.update_rounded,
-      Icons.notifications_off_rounded,
-      Icons.lock_rounded,
-      Icons.shield_rounded,
-      Icons.badge_rounded,
-      Icons.workspaces_rounded,
-      Icons.contrast_rounded,
-      Icons.center_focus_strong_rounded,
+      Icons.chat_bubble_rounded,Icons.chat_bubble_outline_rounded,Icons.done_all_rounded,Icons.notifications_active_rounded,Icons.mark_unread_chat_alt_rounded,Icons.circle_notifications_rounded,Icons.priority_high_rounded,Icons.account_circle_rounded,Icons.groups_rounded,Icons.task_alt_rounded,Icons.call_rounded,Icons.videocam_rounded,Icons.update_rounded,Icons.notifications_off_rounded,Icons.lock_rounded,Icons.shield_rounded,Icons.badge_rounded,Icons.workspaces_rounded,Icons.contrast_rounded,Icons.center_focus_strong_rounded,
     ];
     return icons[index < 0 ? 0 : index];
   }
@@ -376,10 +346,7 @@ class _VariantSection extends StatelessWidget {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                         selected: active,
                         selectedTileColor: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.55),
-                        leading: SizedBox(
-                          width: 30,
-                          child: Text('${index + 1}'.padLeft(2, '0'), style: Theme.of(context).textTheme.labelSmall),
-                        ),
+                        leading: SizedBox(width: 30, child: Text('${index + 1}'.padLeft(2, '0'), style: Theme.of(context).textTheme.labelSmall)),
                         title: Text(option, style: TextStyle(fontWeight: active ? FontWeight.w800 : FontWeight.w500)),
                         trailing: active ? const Icon(Icons.check_rounded) : const Icon(Icons.chevron_right_rounded),
                         onTap: () => Navigator.of(context).pop(option),
