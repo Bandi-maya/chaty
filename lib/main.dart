@@ -1,19 +1,39 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:chat/ui/core/theme/theme_controller.dart';
-import 'package:chat/ui/core/theme/theme_presets.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'package:chat/data/repositories/mock_data_store.dart';
-import 'package:chat/ui/core/controllers/chaty_preferences_controller.dart';
+import 'package:chat/data/services/chaty_backend_service.dart';
 import 'package:chat/data/services/message_automation_service.dart';
-import 'package:chat/ui/core/widgets/click_particle_overlay.dart';
-import 'package:chat/ui/core/widgets/falling_particles_overlay.dart';
 import 'package:chat/features/auth/splash_screen.dart';
 import 'package:chat/injection/locator.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:chat/ui/core/controllers/chaty_preferences_controller.dart';
+import 'package:chat/ui/core/theme/theme_controller.dart';
+import 'package:chat/ui/core/theme/theme_presets.dart';
+import 'package:chat/ui/core/widgets/click_particle_overlay.dart';
+import 'package:chat/ui/core/widgets/falling_particles_overlay.dart';
+
+const String _supabaseUrl = String.fromEnvironment(
+  'SUPABASE_URL',
+  defaultValue: 'https://dntnxeanubswyswahdnj.supabase.co',
+);
+const String _supabasePublishableKey = String.fromEnvironment(
+  'SUPABASE_PUBLISHABLE_KEY',
+  defaultValue: 'sb_publishable_gFpVYJctaDkRRgttvnUl-A_TKu81hFF',
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
+
+  await Supabase.initialize(
+    url: _supabaseUrl,
+    anonKey: _supabasePublishableKey,
+    debug: !kReleaseMode,
+  );
+
   setupLocator();
+  await locator<ChatyBackendService>().initialize();
   runApp(const ChatyApp());
 }
 
@@ -27,17 +47,18 @@ class ChatyApp extends StatefulWidget {
 class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
   late final ThemeController _themeController;
   late final ChatyPreferencesController _preferencesController;
+  late final ChatyBackendService _backend;
   late MessageAutomationService _automationService;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // setupLocator(); // Removed duplicate call
     _themeController = locator<ThemeController>();
     _preferencesController = locator<ChatyPreferencesController>();
+    _backend = locator<ChatyBackendService>();
     _automationService = MessageAutomationService(
-      preferencesController: locator<ChatyPreferencesController>(),
+      preferencesController: _preferencesController,
       dataStore: locator<MockDataStore>(),
     );
   }
@@ -46,12 +67,22 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
   void didChangePlatformBrightness() {
     super.didChangePlatformBrightness();
     final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
-    // If current theme is default monochrome, follow system light/dark change
     if (_themeController.globalTheme.id == 'monochrome_dark' ||
         _themeController.globalTheme.id == 'monochrome_light') {
-      _themeController.setGlobalTheme(
-        ThemePresets.getSystemDefaultTheme(brightness),
-      );
+      _themeController.setGlobalTheme(ThemePresets.getSystemDefaultTheme(brightness));
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (!_backend.isAuthenticated) return;
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_backend.setPresence(PresenceState.online));
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      unawaited(_backend.setPresence(PresenceState.offline));
     }
   }
 
@@ -65,7 +96,7 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
-      listenable: Listenable.merge([_themeController, _preferencesController]),
+      listenable: Listenable.merge(<Listenable>[_themeController, _preferencesController]),
       builder: (context, _) {
         final currentTheme = _themeController.globalTheme;
         return MaterialApp(
@@ -82,7 +113,7 @@ class _ChatyAppState extends State<ChatyApp> with WidgetsBindingObserver {
               ),
             );
           },
-home: const SplashScreen(),
+          home: const SplashScreen(),
         );
       },
     );
