@@ -24,6 +24,7 @@ dependencies:
   record: ^7.1.1
   share_plus: ^13.3.0
   flutter_image_compress: ^2.5.1
+  flutter_webrtc: ^1.6.0
 
 dev_dependencies:
   flutter_test:
