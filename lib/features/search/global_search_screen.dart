@@ -137,7 +137,7 @@ class _GlobalSearchScreenState extends State<GlobalSearchScreen> {
         backgroundColor: theme.cardColor,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: theme.primaryTextColor),
+          icon: Icon(Icons.chevron_left_rounded, color: theme.primaryTextColor),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: TextField(
