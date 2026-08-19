@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../domain/models/chaty_preferences.dart';
 
@@ -26,6 +27,7 @@ class GbFeatureBackendService {
   GbFeatureBackendService({SupabaseClient? client}) : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
+  final Uuid _uuid = const Uuid();
 
   String get _userId {
     final id = _client.auth.currentUser?.id;
@@ -92,12 +94,7 @@ class GbFeatureBackendService {
   }
 
   Future<void> deleteAutoReplyRuleBySignature(String keyword, String response) async {
-    await _client
-        .from('auto_reply_rules')
-        .delete()
-        .eq('user_id', _userId)
-        .ilike('keyword', keyword.trim())
-        .eq('response_body', response.trim());
+    await _client.from('auto_reply_rules').delete().eq('user_id', _userId).ilike('keyword', keyword.trim()).eq('response_body', response.trim());
   }
 
   Future<String> scheduleMessage({required String conversationId, required String body, required DateTime scheduledAt}) async {
@@ -172,6 +169,44 @@ class GbFeatureBackendService {
       'p_body': body.trim(),
     });
     return raw is int ? raw : int.tryParse(raw?.toString() ?? '') ?? 0;
+  }
+
+  Future<String> sendStructuredMessage({
+    required String conversationId,
+    required String type,
+    required String body,
+    Map<String, dynamic> metadata = const <String, dynamic>{},
+  }) async {
+    final raw = await _client.rpc('send_message', params: <String, dynamic>{
+      'p_conversation_id': conversationId,
+      'p_client_message_id': _uuid.v4(),
+      'p_body': body,
+      'p_type': type,
+      'p_metadata': metadata,
+    });
+    return raw.toString();
+  }
+
+  Future<String> createPoll({
+    required String conversationId,
+    required String question,
+    required List<String> options,
+    bool allowMultiple = false,
+  }) async {
+    final clean = options.map((value) => value.trim()).where((value) => value.isNotEmpty).toList(growable: false);
+    if (clean.length < 2) throw Exception('A poll requires at least two options.');
+    final raw = await _client.rpc('create_poll', params: <String, dynamic>{
+      'p_conversation_id': conversationId,
+      'p_client_message_id': _uuid.v4(),
+      'p_question': question.trim(),
+      'p_options': clean,
+      'p_allow_multiple': allowMultiple,
+    });
+    return raw.toString();
+  }
+
+  Future<void> votePoll({required String messageId, required String optionId}) async {
+    await _client.rpc('vote_poll', params: <String, dynamic>{'p_message_id': messageId, 'p_option_id': optionId});
   }
 
   Future<void> setTyping(String conversationId, bool isTyping) async {
