@@ -151,26 +151,16 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
 
   IconData _iconFor(String section) {
     switch (section) {
-      case 'Privacy & security':
-        return Icons.shield_outlined;
-      case 'Chats & messaging':
-        return Icons.chat_bubble_outline_rounded;
-      case 'Appearance & home':
-        return Icons.palette_outlined;
-      case 'Status & stories':
-        return Icons.auto_stories_outlined;
-      case 'Calls':
-        return Icons.call_outlined;
-      case 'Media & storage':
-        return Icons.perm_media_outlined;
-      case 'Notifications & presence':
-        return Icons.notifications_outlined;
-      case 'Navigation & gestures':
-        return Icons.swipe_outlined;
-      case 'Automation & behavior':
-        return Icons.bolt_outlined;
-      default:
-        return Icons.tune_rounded;
+      case 'Privacy & security': return Icons.shield_outlined;
+      case 'Chats & messaging': return Icons.chat_bubble_outline_rounded;
+      case 'Appearance & home': return Icons.palette_outlined;
+      case 'Status & stories': return Icons.auto_stories_outlined;
+      case 'Calls': return Icons.call_outlined;
+      case 'Media & storage': return Icons.perm_media_outlined;
+      case 'Notifications & presence': return Icons.notifications_outlined;
+      case 'Navigation & gestures': return Icons.swipe_outlined;
+      case 'Automation & behavior': return Icons.bolt_outlined;
+      default: return Icons.tune_rounded;
     }
   }
 
@@ -202,7 +192,7 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
       ),
     );
     input.dispose();
-    if (selected != null) await widget.preferencesController.updateGbFeature(item.key, selected);
+    if (selected != null) widget.preferencesController.updateGbFeature(item.key, selected);
   }
 
   Future<void> _runAction(GbFeatureDefinition item) async {
@@ -216,7 +206,6 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
       await Supabase.instance.client.from('blocked_users').delete().eq('blocker_id', user.id);
       return;
     }
-
     final input = TextEditingController(text: widget.preferencesController.gbString(item.key));
     final result = await showDialog<String>(
       context: context,
@@ -230,7 +219,7 @@ class _GbSettingsHubScreenState extends State<GbSettingsHubScreen> {
       ),
     );
     input.dispose();
-    if (result != null) await widget.preferencesController.updateGbFeature(item.key, result);
+    if (result != null) widget.preferencesController.updateGbFeature(item.key, result);
   }
 
   Future<void> _confirmReset() async {
@@ -289,12 +278,7 @@ class _SettingsSectionScreen extends StatelessWidget {
                     ),
                   ),
                   for (final feature in entry.value)
-                    _FeatureRow(
-                      feature: feature,
-                      controller: controller,
-                      onColor: onColor,
-                      onAction: onAction,
-                    ),
+                    _FeatureRow(feature: feature, controller: controller, onColor: onColor, onAction: onAction),
                 ],
               ],
             ),
@@ -311,12 +295,7 @@ class _SearchResults extends StatelessWidget {
   final Future<void> Function(GbFeatureDefinition) onColor;
   final Future<void> Function(GbFeatureDefinition) onAction;
 
-  const _SearchResults({
-    required this.results,
-    required this.controller,
-    required this.onColor,
-    required this.onAction,
-  });
+  const _SearchResults({required this.results, required this.controller, required this.onColor, required this.onAction});
 
   @override
   Widget build(BuildContext context) {
@@ -345,13 +324,7 @@ class _FeatureRow extends StatelessWidget {
   final Future<void> Function(GbFeatureDefinition) onAction;
   final bool showLocation;
 
-  const _FeatureRow({
-    required this.feature,
-    required this.controller,
-    required this.onColor,
-    required this.onAction,
-    this.showLocation = false,
-  });
+  const _FeatureRow({required this.feature, required this.controller, required this.onColor, required this.onAction, this.showLocation = false});
 
   @override
   Widget build(BuildContext context) {
@@ -468,6 +441,6 @@ class _FeatureRow extends StatelessWidget {
         ),
       ),
     );
-    if (selected != null) await controller.updateGbFeature(feature.key, selected);
+    if (selected != null) controller.updateGbFeature(feature.key, selected);
   }
 }
