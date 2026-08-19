@@ -36,7 +36,14 @@ class ChatDetailScreen extends StatefulWidget {
   final ChatyPreferencesController preferencesController;
   final ThemeController? themeController;
 
-  const ChatDetailScreen({super.key, required this.theme, required this.dataStore, required this.conversationId, required this.preferencesController, this.themeController});
+  const ChatDetailScreen({
+    super.key,
+    required this.theme,
+    required this.dataStore,
+    required this.conversationId,
+    required this.preferencesController,
+    this.themeController,
+  });
 
   @override
   State<ChatDetailScreen> createState() => _ChatDetailScreenState();
@@ -52,14 +59,26 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   ChatMessage? _replyTarget;
   bool _showQuickReplyOverlay = false;
 
-  ThemeConfig get _theme => GbThemeOverrides.resolve(widget.themeController?.globalTheme ?? widget.theme, widget.preferencesController);
+  ThemeConfig get _theme => GbThemeOverrides.resolve(
+        widget.themeController?.globalTheme ?? widget.theme,
+        widget.preferencesController,
+      );
 
   @override
   void initState() {
     super.initState();
-    _attachments = ChatAttachmentActions(conversationId: widget.conversationId, dataStore: widget.dataStore, preferencesController: widget.preferencesController);
-    final conversation = widget.dataStore.conversations.where((item) => item.id == widget.conversationId).firstOrNull;
-    if (conversation != null && conversation.draftText.isNotEmpty) _textCtrl.text = conversation.draftText;
+    widget.dataStore.addListener(_onDataStoreChanged);
+    _attachments = ChatAttachmentActions(
+      conversationId: widget.conversationId,
+      dataStore: widget.dataStore,
+      preferencesController: widget.preferencesController,
+    );
+    final conversation = widget.dataStore.conversations
+        .where((item) => item.id == widget.conversationId)
+        .firstOrNull;
+    if (conversation != null && conversation.draftText.isNotEmpty) {
+      _textCtrl.text = conversation.draftText;
+    }
     widget.dataStore.ensureConversationLoaded(widget.conversationId).then((_) {
       if (!mounted) return;
       setState(() {});
@@ -67,17 +86,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }).catchError((_) {});
   }
 
+  void _onDataStoreChanged() {
+    if (!mounted) return;
+    final shouldFollow = !_scrollCtrl.hasClients ||
+        (_scrollCtrl.position.maxScrollExtent - _scrollCtrl.position.pixels) < 180;
+    setState(() {});
+    if (shouldFollow) _scrollToBottom();
+  }
+
   @override
   void dispose() {
+    widget.dataStore.removeListener(_onDataStoreChanged);
     _typingIdleTimer?.cancel();
-    if (_typingPublished) widget.dataStore.setTyping(widget.conversationId, false);
+    if (_typingPublished) {
+      widget.dataStore.setTyping(widget.conversationId, false);
+    }
     widget.dataStore.setDraft(widget.conversationId, _textCtrl.text);
     _textCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
-  String _senderName(String senderId) => senderId == widget.dataStore.currentUser.id ? 'You' : (widget.dataStore.getUser(senderId)?.displayName ?? 'Chaty user');
+  String _senderName(String senderId) => senderId == widget.dataStore.currentUser.id
+      ? 'You'
+      : (widget.dataStore.getUser(senderId)?.displayName ?? 'Chaty user');
 
   String _lastSeen(UserProfile? user) {
     if (user == null) return '';
@@ -99,8 +131,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   void _handleComposerChanged(String value) {
     widget.dataStore.setDraft(widget.conversationId, value);
     final shouldType = value.trim().isNotEmpty;
-    if (shouldType && !_typingPublished) { _typingPublished = true; widget.dataStore.setTyping(widget.conversationId, true); }
-    if (!shouldType && _typingPublished) { _typingPublished = false; widget.dataStore.setTyping(widget.conversationId, false); }
+    if (shouldType && !_typingPublished) {
+      _typingPublished = true;
+      widget.dataStore.setTyping(widget.conversationId, true);
+    }
+    if (!shouldType && _typingPublished) {
+      _typingPublished = false;
+      widget.dataStore.setTyping(widget.conversationId, false);
+    }
     _typingIdleTimer?.cancel();
     if (shouldType) {
       _typingIdleTimer = Timer(const Duration(seconds: 5), () {
@@ -117,23 +155,55 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     if (text.isEmpty) return;
     final command = ChatCommandParser.parse(text);
     if (command.type == ChatCommandType.task) {
-      _textCtrl.clear(); _typingPublished = false; widget.dataStore.setTyping(widget.conversationId, false); setState(() {});
-      _openCreateTaskModal(initialTitle: command.argument.isEmpty ? null : command.argument); return;
+      _textCtrl.clear();
+      _typingPublished = false;
+      widget.dataStore.setTyping(widget.conversationId, false);
+      setState(() {});
+      _openCreateTaskModal(initialTitle: command.argument.isEmpty ? null : command.argument);
+      return;
     }
     final reply = _replyTarget;
-    _textCtrl.clear(); _typingIdleTimer?.cancel();
-    if (_typingPublished) { _typingPublished = false; widget.dataStore.setTyping(widget.conversationId, false); }
-    setState(() { _replyTarget = null; _showQuickReplyOverlay = false; });
+    _textCtrl.clear();
+    _typingIdleTimer?.cancel();
+    if (_typingPublished) {
+      _typingPublished = false;
+      widget.dataStore.setTyping(widget.conversationId, false);
+    }
+    setState(() {
+      _replyTarget = null;
+      _showQuickReplyOverlay = false;
+    });
     try {
-      await widget.dataStore.sendMessage(conversationId: widget.conversationId, text: text, replyToMessageId: reply?.id, replyToSenderName: reply == null ? null : _senderName(reply.senderId), replyToPreviewText: reply?.text);
+      final sendFuture = widget.dataStore.sendMessage(
+        conversationId: widget.conversationId,
+        text: text,
+        replyToMessageId: reply?.id,
+        replyToSenderName: reply == null ? null : _senderName(reply.senderId),
+        replyToPreviewText: reply?.text,
+      );
       _scrollToBottom();
+      await sendFuture;
     } catch (error) {
-      if (!mounted) return; _textCtrl.text = text;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Exception: ', '')))); setState(() {});
+      if (!mounted) return;
+      _textCtrl.text = text;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+      );
+      setState(() {});
     }
   }
 
-  void _scrollToBottom() { WidgetsBinding.instance.addPostFrameCallback((_) { if (_scrollCtrl.hasClients) _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent, duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic); }); }
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
+  }
 
   Future<void> _copyMessage(ChatMessage message) async {
     await Clipboard.setData(ClipboardData(text: message.text));
@@ -158,80 +228,457 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   void _onMessageLongPress(ChatMessage message) {
-    final theme = _theme; final isMine = message.senderId == widget.dataStore.currentUser.id;
-    showModalBottomSheet(context: context, backgroundColor: Colors.transparent, builder: (sheetContext) => MessageActionSheet(
-      message: message, isMe: isMine, theme: theme,
-      onReact: (emoji) { widget.dataStore.toggleReaction(widget.conversationId, message.id, emoji); Navigator.of(sheetContext).pop(); },
-      onReply: () { Navigator.of(sheetContext).pop(); setState(() => _replyTarget = message); },
-      onPin: () { widget.dataStore.togglePinMessage(widget.conversationId, message.id); Navigator.of(sheetContext).pop(); },
-      onStar: () { widget.dataStore.toggleStarMessage(widget.conversationId, message.id); Navigator.of(sheetContext).pop(); },
-      onCopy: () { unawaited(_copyMessage(message)); },
-      onDeleteForMe: () { widget.dataStore.deleteMessage(widget.conversationId, message.id, forEveryone: false); Navigator.of(sheetContext).pop(); },
-      onDeleteForEveryone: isMine ? () { widget.dataStore.deleteMessage(widget.conversationId, message.id, forEveryone: true); Navigator.of(sheetContext).pop(); } : null,
-      onReport: () { unawaited(_reportMessage(message)); },
-      onCreateTask: () { Navigator.of(sheetContext).pop(); _openCreateTaskModal(initialTitle: message.text, sourceMessageId: message.id); },
-    ));
+    if (message.id.startsWith('local_')) return;
+    final theme = _theme;
+    final isMine = message.senderId == widget.dataStore.currentUser.id;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => MessageActionSheet(
+        message: message,
+        isMe: isMine,
+        theme: theme,
+        onReact: (emoji) {
+          widget.dataStore.toggleReaction(widget.conversationId, message.id, emoji);
+          Navigator.of(sheetContext).pop();
+        },
+        onReply: () {
+          Navigator.of(sheetContext).pop();
+          setState(() => _replyTarget = message);
+        },
+        onPin: () {
+          widget.dataStore.togglePinMessage(widget.conversationId, message.id);
+          Navigator.of(sheetContext).pop();
+        },
+        onStar: () {
+          widget.dataStore.toggleStarMessage(widget.conversationId, message.id);
+          Navigator.of(sheetContext).pop();
+        },
+        onCopy: () => unawaited(_copyMessage(message)),
+        onDeleteForMe: () {
+          widget.dataStore.deleteMessage(widget.conversationId, message.id, forEveryone: false);
+          Navigator.of(sheetContext).pop();
+        },
+        onDeleteForEveryone: isMine
+            ? () {
+                widget.dataStore.deleteMessage(widget.conversationId, message.id, forEveryone: true);
+                Navigator.of(sheetContext).pop();
+              }
+            : null,
+        onReport: () => unawaited(_reportMessage(message)),
+        onCreateTask: () {
+          Navigator.of(sheetContext).pop();
+          _openCreateTaskModal(initialTitle: message.text, sourceMessageId: message.id);
+        },
+      ),
+    );
   }
 
-  void _openCreateTaskModal({String? initialTitle, String? sourceMessageId}) { showModalBottomSheet(context: context, backgroundColor: Colors.transparent, isScrollControlled: true, builder: (_) => TaskCreateEditModal(theme: _theme, dataStore: widget.dataStore, sourceConversationId: widget.conversationId, initialTitle: initialTitle, sourceMessageId: sourceMessageId)); }
+  void _openCreateTaskModal({String? initialTitle, String? sourceMessageId}) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => TaskCreateEditModal(
+        theme: _theme,
+        dataStore: widget.dataStore,
+        sourceConversationId: widget.conversationId,
+        initialTitle: initialTitle,
+        sourceMessageId: sourceMessageId,
+      ),
+    );
+  }
 
-  void _openAttachmentSheet() { showModalBottomSheet(context: context, backgroundColor: Colors.transparent, builder: (_) => AttachmentSheet(theme: _theme, onMediaRequested: (type) async { await _attachments.shareMedia(context, type); _scrollToBottom(); }, onLocationRequested: () async { await _attachments.shareLocation(context); _scrollToBottom(); }, onContactRequested: () async { await _attachments.shareContact(context); _scrollToBottom(); }, onPollRequested: () async { await _attachments.createPoll(context); _scrollToBottom(); }, onTaskOption: _openCreateTaskModal)); }
+  void _openAttachmentSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AttachmentSheet(
+        theme: _theme,
+        onMediaRequested: (type) async {
+          await _attachments.shareMedia(context, type);
+          _scrollToBottom();
+        },
+        onLocationRequested: () async {
+          await _attachments.shareLocation(context);
+          _scrollToBottom();
+        },
+        onContactRequested: () async {
+          await _attachments.shareContact(context);
+          _scrollToBottom();
+        },
+        onPollRequested: () async {
+          await _attachments.createPoll(context);
+          _scrollToBottom();
+        },
+        onTaskOption: _openCreateTaskModal,
+      ),
+    );
+  }
 
   Future<void> _openEmojiPicker() async {
     const emojis = <String>['😀','😂','🥰','😍','🙂','😉','😎','🤔','😭','😡','👍','👎','👏','🙏','❤️','🔥','🎉','✨','💯','✅','🚀','👀','🤝','💪','🥳','😴','🤯','😅','🙌','💡'];
-    final selected = await showModalBottomSheet<String>(context: context, showDragHandle: true, builder: (context) => SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(16, 4, 16, 20), child: Wrap(spacing: 8, runSpacing: 8, children: emojis.map((emoji) => InkWell(borderRadius: BorderRadius.circular(12), onTap: () => Navigator.of(context).pop(emoji), child: SizedBox(width: 44, height: 44, child: Center(child: Text(emoji, style: const TextStyle(fontSize: 25)))))).toList(growable: false)))));
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+          child: Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: emojis
+                .map((emoji) => InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () => Navigator.of(context).pop(emoji),
+                      child: SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: Center(child: Text(emoji, style: const TextStyle(fontSize: 25))),
+                      ),
+                    ))
+                .toList(growable: false),
+          ),
+        ),
+      ),
+    );
     if (selected == null || !mounted) return;
-    final value = _textCtrl.value; final selection = value.selection.isValid ? value.selection : TextSelection.collapsed(offset: value.text.length); final start = selection.start.clamp(0, value.text.length); final end = selection.end.clamp(0, value.text.length); final next = value.text.replaceRange(start, end, selected); final cursor = start + selected.length;
-    _textCtrl.value = TextEditingValue(text: next, selection: TextSelection.collapsed(offset: cursor)); _handleComposerChanged(next);
+    final value = _textCtrl.value;
+    final selection = value.selection.isValid
+        ? value.selection
+        : TextSelection.collapsed(offset: value.text.length);
+    final start = selection.start.clamp(0, value.text.length);
+    final end = selection.end.clamp(0, value.text.length);
+    final next = value.text.replaceRange(start, end, selected);
+    final cursor = start + selected.length;
+    _textCtrl.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: cursor),
+    );
+    _handleComposerChanged(next);
   }
 
   void _startCall(bool isVideo) {
-    final conversation = widget.dataStore.conversations.where((item) => item.id == widget.conversationId).firstOrNull;
+    final conversation = widget.dataStore.conversations
+        .where((item) => item.id == widget.conversationId)
+        .firstOrNull;
     if (conversation == null) return;
     if (conversation.type != ConversationType.direct) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Group calling is not enabled yet. Start a direct chat to call a participant.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Group calling is not enabled yet. Start a direct chat to call a participant.')),
+      );
       return;
     }
-    final peerId = conversation.participantIds.firstWhere((id) => id != widget.dataStore.currentUser.id, orElse: () => '');
-    if (peerId.isEmpty) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No callable participant was found.'))); return; }
+    final peerId = conversation.participantIds.firstWhere(
+      (id) => id != widget.dataStore.currentUser.id,
+      orElse: () => '',
+    );
+    if (peerId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No callable participant was found.')),
+      );
+      return;
+    }
     final service = ChatyCallService();
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatyCallScreen(theme: _theme, callService: service, title: conversation.title, conversationId: conversation.id, peerUserId: peerId, isVideo: isVideo))).whenComplete(service.dispose);
+    Navigator.of(context)
+        .push(MaterialPageRoute(
+          builder: (_) => ChatyCallScreen(
+            theme: _theme,
+            callService: service,
+            title: conversation.title,
+            conversationId: conversation.id,
+            peerUserId: peerId,
+            isVideo: isVideo,
+          ),
+        ))
+        .whenComplete(service.dispose);
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = _theme; final dataStore = widget.dataStore;
-    final conversation = dataStore.conversations.where((item) => item.id == widget.conversationId).firstOrNull;
-    if (conversation == null) return Scaffold(backgroundColor: theme.backgroundColor, appBar: AppBar(automaticallyImplyLeading: false, leading: IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.chevron_left_rounded)), title: const Text('Chat')), body: Center(child: Text('Conversation unavailable', style: TextStyle(color: theme.secondaryTextColor))));
+    final theme = _theme;
+    final dataStore = widget.dataStore;
+    final conversation = dataStore.conversations
+        .where((item) => item.id == widget.conversationId)
+        .firstOrNull;
+    if (conversation == null) {
+      return Scaffold(
+        backgroundColor: theme.backgroundColor,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leading: IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.chevron_left_rounded),
+          ),
+          title: const Text('Chat'),
+        ),
+        body: Center(
+          child: Text('Conversation unavailable', style: TextStyle(color: theme.secondaryTextColor)),
+        ),
+      );
+    }
 
-    final otherId = conversation.participantIds.firstWhere((id) => id != dataStore.currentUser.id, orElse: () => '');
-    final otherUser = otherId.isEmpty ? null : dataStore.getUser(otherId); final remoteTyping = dataStore.isTypingInChat(widget.conversationId);
-    final presence = conversation.type == ConversationType.direct ? (remoteTyping ? 'typing…' : _lastSeen(otherUser)) : (remoteTyping ? 'someone is typing…' : '${conversation.participantIds.length} participants');
-    final messages = dataStore.getMessages(widget.conversationId); final autoPrefs = widget.preferencesController.automation; final appearanceController = locator<AppearanceVariantController>();
+    final otherId = conversation.participantIds.firstWhere(
+      (id) => id != dataStore.currentUser.id,
+      orElse: () => '',
+    );
+    final otherUser = otherId.isEmpty ? null : dataStore.getUser(otherId);
+    final remoteTyping = dataStore.isTypingInChat(widget.conversationId);
+    final presence = conversation.type == ConversationType.direct
+        ? (remoteTyping ? 'typing…' : _lastSeen(otherUser))
+        : (remoteTyping ? 'someone is typing…' : '${conversation.participantIds.length} participants');
+    final messages = dataStore.getMessages(widget.conversationId);
+    final autoPrefs = widget.preferencesController.automation;
+    final appearanceController = locator<AppearanceVariantController>();
 
     Widget chat = Scaffold(
       backgroundColor: theme.backgroundColor,
-      appBar: AppBar(automaticallyImplyLeading: false, backgroundColor: theme.surfaceColor, foregroundColor: theme.primaryTextColor, surfaceTintColor: Colors.transparent, elevation: 0.5,
-        leading: IconButton(tooltip: 'Back', onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.chevron_left_rounded)), titleSpacing: 0,
-        title: InkWell(onTap: conversation.type == ConversationType.group ? () { Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupInfoScreen(theme: theme, dataStore: dataStore, conversationId: widget.conversationId))); } : null,
-          child: Row(children: [AppAvatar(initials: conversation.avatarInitials ?? conversation.title.characters.take(2).toString().toUpperCase(), colorHex: conversation.avatarColorHex ?? '0xFF6366F1', size: 38), const SizedBox(width: 10), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [Text(conversation.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: theme.primaryTextColor, fontSize: 15.5 * theme.fontScale, fontWeight: FontWeight.w800)), Text(presence, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: remoteTyping || otherUser?.presence == PresenceState.online ? theme.successColor : theme.secondaryTextColor, fontSize: 10.5 * theme.fontScale, fontWeight: FontWeight.w500))]))])),
-        actions: [IconButton(icon: const Icon(Icons.call_rounded), tooltip: 'Voice call', onPressed: () => _startCall(false)), IconButton(icon: const Icon(Icons.videocam_rounded), tooltip: 'Video call', onPressed: () => _startCall(true)), Padding(padding: const EdgeInsets.only(right: 6), child: SecurityChip(status: conversation.encryptionStatus))]),
-      body: SafeArea(top: false, child: Column(children: [
-        Expanded(child: messages.isEmpty ? Center(child: Text('No messages yet', style: TextStyle(color: theme.secondaryTextColor))) : ListView.builder(controller: _scrollCtrl, padding: const EdgeInsets.symmetric(vertical: 8), itemCount: messages.length, itemBuilder: (context, index) {
-          final message = messages[index]; final isMine = message.senderId == dataStore.currentUser.id;
-          final bubble = MessageBubble(message: message, isMe: isMine, theme: theme, senderName: conversation.type == ConversationType.group && !isMine ? _senderName(message.senderId) : null, onLongPress: () => _onMessageLongPress(message), onReactionTap: (emoji) => dataStore.toggleReaction(conversation.id, message.id, emoji), onTaskTap: message.linkedTaskId == null ? null : () => _openCreateTaskModal(sourceMessageId: message.id), onMediaTap: message.attachment == null ? null : () { Navigator.of(context).push(MaterialPageRoute(builder: (_) => MediaViewerScreen(title: message.attachment!.name, type: message.attachment!.type, size: message.attachment!.size, storagePath: message.attachment!.url, theme: theme))); });
-          if (!ChatAttachmentActions.isPollMessage(message)) return bubble; return GestureDetector(behavior: HitTestBehavior.translucent, onTap: () => _attachments.openPoll(context, message.id), child: bubble);
-        })),
-        if (_showQuickReplyOverlay && autoPrefs.quickReplies.isNotEmpty) Container(margin: const EdgeInsets.fromLTRB(12, 4, 12, 4), constraints: const BoxConstraints(maxHeight: 180), decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(14), border: Border.all(color: theme.surfaceColor)), child: ListView(shrinkWrap: true, children: autoPrefs.quickReplies.map((reply) => ListTile(dense: true, title: Text('${reply.shortcut} — ${reply.title}', style: TextStyle(color: theme.primaryTextColor, fontWeight: FontWeight.w700, fontSize: 12.5)), subtitle: Text(reply.content, maxLines: 1, overflow: TextOverflow.ellipsis), onTap: () { _textCtrl.text = reply.content; _textCtrl.selection = TextSelection.collapsed(offset: _textCtrl.text.length); _handleComposerChanged(_textCtrl.text); })).toList(growable: false))),
-        if (_replyTarget != null) Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7), color: theme.cardColor, child: Row(children: [Icon(Icons.reply_rounded, color: theme.accentColor, size: 18), const SizedBox(width: 9), Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Replying to ${_senderName(_replyTarget!.senderId)}', style: TextStyle(color: theme.accentColor, fontSize: 11.5, fontWeight: FontWeight.w700)), Text(_replyTarget!.text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: theme.secondaryTextColor, fontSize: 11.5))])), IconButton(onPressed: () => setState(() => _replyTarget = null), icon: const Icon(Icons.close_rounded, size: 18))])),
-        ListenableBuilder(listenable: appearanceController, builder: (context, _) => PremiumMessageComposer(styleIndex: appearanceController.composerIndex, theme: theme, controller: _textCtrl, onAttach: _openAttachmentSheet, onSend: _sendMessage, onEmoji: _openEmojiPicker, onChanged: _handleComposerChanged, onVoice: () async { if (_typingPublished) { _typingPublished = false; widget.dataStore.setTyping(widget.conversationId, false); } await _attachments.recordVoiceNote(context); _scrollToBottom(); })),
-      ])),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: theme.surfaceColor,
+        foregroundColor: theme.primaryTextColor,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0.5,
+        leading: IconButton(
+          tooltip: 'Back',
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.chevron_left_rounded),
+        ),
+        titleSpacing: 0,
+        title: InkWell(
+          onTap: conversation.type == ConversationType.group
+              ? () {
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => GroupInfoScreen(
+                      theme: theme,
+                      dataStore: dataStore,
+                      conversationId: widget.conversationId,
+                    ),
+                  ));
+                }
+              : null,
+          child: Row(
+            children: [
+              AppAvatar(
+                initials: conversation.avatarInitials ?? conversation.title.characters.take(2).toString().toUpperCase(),
+                colorHex: conversation.avatarColorHex ?? '0xFF6366F1',
+                size: 42,
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      conversation.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: theme.primaryTextColor,
+                        fontSize: 17 * theme.fontScale,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      presence,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: remoteTyping || otherUser?.presence == PresenceState.online
+                            ? theme.successColor
+                            : theme.secondaryTextColor,
+                        fontSize: 12 * theme.fontScale,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          IconButton(icon: const Icon(Icons.call_rounded), tooltip: 'Voice call', onPressed: () => _startCall(false)),
+          IconButton(icon: const Icon(Icons.videocam_rounded), tooltip: 'Video call', onPressed: () => _startCall(true)),
+          Padding(padding: const EdgeInsets.only(right: 6), child: SecurityChip(status: conversation.encryptionStatus)),
+        ],
+      ),
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: messages.isEmpty
+                  ? Center(child: Text('No messages yet', style: TextStyle(color: theme.secondaryTextColor, fontSize: 15)))
+                  : ListView.builder(
+                      controller: _scrollCtrl,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final message = messages[index];
+                        final isMine = message.senderId == dataStore.currentUser.id;
+                        final isLocal = message.id.startsWith('local_');
+                        final bubble = MessageBubble(
+                          message: message,
+                          isMe: isMine,
+                          theme: theme,
+                          senderName: conversation.type == ConversationType.group && !isMine ? _senderName(message.senderId) : null,
+                          onLongPress: isLocal ? () {} : () => _onMessageLongPress(message),
+                          onReactionTap: isLocal ? null : (emoji) => dataStore.toggleReaction(conversation.id, message.id, emoji),
+                          onTaskTap: message.linkedTaskId == null || isLocal ? null : () => _openCreateTaskModal(sourceMessageId: message.id),
+                          onMediaTap: message.attachment == null
+                              ? null
+                              : () {
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) => MediaViewerScreen(
+                                      title: message.attachment!.name,
+                                      type: message.attachment!.type,
+                                      size: message.attachment!.size,
+                                      storagePath: message.attachment!.url,
+                                      theme: theme,
+                                    ),
+                                  ));
+                                },
+                        );
+                        if (!ChatAttachmentActions.isPollMessage(message) || isLocal) return bubble;
+                        return GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTap: () => _attachments.openPoll(context, message.id),
+                          child: bubble,
+                        );
+                      },
+                    ),
+            ),
+            if (_showQuickReplyOverlay && autoPrefs.quickReplies.isNotEmpty)
+              Container(
+                margin: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                constraints: const BoxConstraints(maxHeight: 190),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: theme.surfaceColor),
+                ),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: autoPrefs.quickReplies
+                      .map((reply) => ListTile(
+                            title: Text(
+                              '${reply.shortcut} — ${reply.title}',
+                              style: TextStyle(color: theme.primaryTextColor, fontWeight: FontWeight.w700, fontSize: 14),
+                            ),
+                            subtitle: Text(reply.content, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            onTap: () {
+                              _textCtrl.text = reply.content;
+                              _textCtrl.selection = TextSelection.collapsed(offset: _textCtrl.text.length);
+                              _handleComposerChanged(_textCtrl.text);
+                            },
+                          ))
+                      .toList(growable: false),
+                ),
+              ),
+            if (_replyTarget != null)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                color: theme.cardColor,
+                child: Row(
+                  children: [
+                    Icon(Icons.reply_rounded, color: theme.accentColor, size: 20),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Replying to ${_senderName(_replyTarget!.senderId)}',
+                            style: TextStyle(color: theme.accentColor, fontSize: 13, fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            _replyTarget!.text,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: theme.secondaryTextColor, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(onPressed: () => setState(() => _replyTarget = null), icon: const Icon(Icons.close_rounded, size: 20)),
+                  ],
+                ),
+              ),
+            ListenableBuilder(
+              listenable: appearanceController,
+              builder: (context, _) => PremiumMessageComposer(
+                styleIndex: appearanceController.composerIndex,
+                theme: theme,
+                controller: _textCtrl,
+                onAttach: _openAttachmentSheet,
+                onSend: _sendMessage,
+                onEmoji: _openEmojiPicker,
+                onChanged: _handleComposerChanged,
+                onVoice: () async {
+                  if (_typingPublished) {
+                    _typingPublished = false;
+                    widget.dataStore.setTyping(widget.conversationId, false);
+                  }
+                  await _attachments.recordVoiceNote(context);
+                  _scrollToBottom();
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
 
     final conversationPrefs = widget.preferencesController.conversation;
     if (!conversationPrefs.enableQuickContactSidebar || MediaQuery.sizeOf(context).width < 720) return chat;
     final contacts = dataStore.contacts;
-    Widget sidebar() => Container(width: 62, color: theme.surfaceColor.withValues(alpha: conversationPrefs.sidebarOpacity), child: ListView.builder(padding: const EdgeInsets.symmetric(vertical: 8), itemCount: contacts.length, itemBuilder: (context, index) { final contact = contacts[index]; return Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: InkWell(borderRadius: BorderRadius.circular(30), onTap: () async { try { final next = await dataStore.getOrCreateDirectConversation(contact); if (!mounted) return; Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => ChatDetailScreen(conversationId: next.id, theme: theme, dataStore: dataStore, preferencesController: widget.preferencesController, themeController: widget.themeController))); } catch (_) {} }, child: Center(child: ChatyAvatar(initials: contact.avatarInitials, color: Color(int.parse(contact.avatarColorHex)), size: 38)))); }));
-    return Row(children: [if (conversationPrefs.sidebarPosition == 'Left') sidebar(), Expanded(child: chat), if (conversationPrefs.sidebarPosition == 'Right') sidebar()]);
+    Widget sidebar() => Container(
+          width: 68,
+          color: theme.surfaceColor.withValues(alpha: conversationPrefs.sidebarOpacity),
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: contacts.length,
+            itemBuilder: (context, index) {
+              final contact = contacts[index];
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(30),
+                  onTap: () async {
+                    try {
+                      final next = await dataStore.getOrCreateDirectConversation(contact);
+                      if (!mounted) return;
+                      Navigator.of(context).pushReplacement(MaterialPageRoute(
+                        builder: (_) => ChatDetailScreen(
+                          conversationId: next.id,
+                          theme: theme,
+                          dataStore: dataStore,
+                          preferencesController: widget.preferencesController,
+                          themeController: widget.themeController,
+                        ),
+                      ));
+                    } catch (_) {}
+                  },
+                  child: Center(
+                    child: ChatyAvatar(
+                      initials: contact.avatarInitials,
+                      color: Color(int.parse(contact.avatarColorHex)),
+                      size: 42,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+    return Row(
+      children: [
+        if (conversationPrefs.sidebarPosition == 'Left') sidebar(),
+        Expanded(child: chat),
+        if (conversationPrefs.sidebarPosition == 'Right') sidebar(),
+      ],
+    );
   }
 }
