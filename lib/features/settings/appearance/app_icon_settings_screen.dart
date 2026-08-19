@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
@@ -72,13 +71,9 @@ class _AppIconSettingsScreenState extends State<AppIconSettingsScreen> {
   Future<void> _pickCustomImage() async {
     if (widget.appIconController.isBusy) return;
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-        withData: false,
-      );
-      if (!mounted || result == null || result.files.isEmpty) return;
-      final selected = result.files.single;
+      final files = await FilePicker.pickFiles(type: FileType.image);
+      if (!mounted || files.isEmpty) return;
+      final selected = files.single;
       const maxInputBytes = 25 * 1024 * 1024;
       if (selected.size > maxInputBytes) {
         if (!mounted) return;
