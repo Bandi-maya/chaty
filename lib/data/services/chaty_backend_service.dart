@@ -52,7 +52,6 @@ class ChatyBackendService extends ChangeNotifier {
   final List<UpdateStory> _stories = <UpdateStory>[];
   final List<LinkedDevice> _linkedDevices = <LinkedDevice>[];
 
-  StreamSubscription<AuthState>? _authSubscription;
   RealtimeChannel? _realtimeChannel;
   Timer? _reconcileTimer;
   bool _isInitialized = false;
@@ -81,7 +80,7 @@ class ChatyBackendService extends ChangeNotifier {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
-    _authSubscription = _client.auth.onAuthStateChange.listen((AuthState state) {
+    _client.auth.onAuthStateChange.listen((AuthState state) {
       unawaited(_handleSession(state.session));
     });
 
@@ -149,7 +148,6 @@ class ChatyBackendService extends ChangeNotifier {
     _currentUser = profile;
     _usersById[profile.id] = profile;
 
-    // Presence is metadata only; chat content does not depend on it.
     unawaited(
       _client
           .from('profiles')
@@ -197,8 +195,6 @@ class ChatyBackendService extends ChangeNotifier {
       ..clear()
       ..addAll(next);
 
-    // Fetch member profiles for conversations currently visible. This does not
-    // expose arbitrary users; the RPC verifies membership server-side.
     await Future.wait<void>(next.keys.map(_loadConversationMembers));
   }
 
@@ -403,8 +399,12 @@ class ChatyBackendService extends ChangeNotifier {
     return profile;
   }
 
-  Future<UserProfile> loginWithSocial(String provider) async {
-    throw Exception('$provider sign-in is not configured yet. Use email/password sign-in.');
+  Future<UserProfile> loginWithSocial({
+    required String provider,
+    String email = '',
+    String displayName = '',
+  }) async {
+    throw Exception('$provider sign-in is not configured on the Chaty Supabase project yet. Use email/password sign-in.');
   }
 
   Future<void> resetPassword(String email) async {
@@ -715,8 +715,6 @@ class ChatyBackendService extends ChangeNotifier {
     }).eq('id', authUser.id);
   }
 
-  // The corresponding screens remain available. Until their production RTC/
-  // media services are connected they contain no fabricated server records.
   void addStory(String content) {
     throw UnsupportedError('Status publishing requires the production media/status service.');
   }
@@ -728,9 +726,7 @@ class ChatyBackendService extends ChangeNotifier {
     required CallType type,
     required CallDirection direction,
     required int durationSeconds,
-  }) {
-    // Call history is intentionally not fabricated without a real RTC session.
-  }
+  }) {}
 
   void revokeLinkedDevice(String deviceId) {
     _linkedDevices.removeWhere((device) => device.id == deviceId && !device.isCurrentDevice);
