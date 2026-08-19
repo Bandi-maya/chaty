@@ -1,14 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import '../../../ui/core/theme/theme_config.dart';
-import '../../../ui/core/theme/theme_controller.dart';
+import '../../ui/core/theme/theme_config.dart';
+import '../../ui/core/theme/theme_controller.dart';
 import '../../domain/models/conversation.dart';
 import '../../domain/models/user_profile.dart';
 import '../../domain/models/chat_message.dart';
 import '../../data/repositories/mock_data_store.dart';
 import '../../data/services/chaty_call_service.dart';
+import '../../data/services/chat_report_service.dart';
 import '../../ui/core/controllers/chaty_preferences_controller.dart';
 import '../../ui/core/controllers/appearance_variant_controller.dart';
 import '../../ui/core/design_system/chaty_settings_primitives.dart';
@@ -43,6 +45,7 @@ class ChatDetailScreen extends StatefulWidget {
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final TextEditingController _textCtrl = TextEditingController();
   final ScrollController _scrollCtrl = ScrollController();
+  final ChatReportService _reportService = ChatReportService();
   late final ChatAttachmentActions _attachments;
   Timer? _typingIdleTimer;
   bool _typingPublished = false;
@@ -132,6 +135,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   void _scrollToBottom() { WidgetsBinding.instance.addPostFrameCallback((_) { if (_scrollCtrl.hasClients) _scrollCtrl.animateTo(_scrollCtrl.position.maxScrollExtent, duration: const Duration(milliseconds: 220), curve: Curves.easeOutCubic); }); }
 
+  Future<void> _copyMessage(ChatMessage message) async {
+    await Clipboard.setData(ClipboardData(text: message.text));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message copied')));
+  }
+
+  Future<void> _reportMessage(ChatMessage message) async {
+    try {
+      await _reportService.reportMessage(
+        conversationId: widget.conversationId,
+        messageId: message.id,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report submitted')));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
+  }
+
   void _onMessageLongPress(ChatMessage message) {
     final theme = _theme; final isMine = message.senderId == widget.dataStore.currentUser.id;
     showModalBottomSheet(context: context, backgroundColor: Colors.transparent, builder: (sheetContext) => MessageActionSheet(
@@ -140,10 +165,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       onReply: () { Navigator.of(sheetContext).pop(); setState(() => _replyTarget = message); },
       onPin: () { widget.dataStore.togglePinMessage(widget.conversationId, message.id); Navigator.of(sheetContext).pop(); },
       onStar: () { widget.dataStore.toggleStarMessage(widget.conversationId, message.id); Navigator.of(sheetContext).pop(); },
-      onCopy: () { Navigator.of(sheetContext).pop(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Message copied'))); },
+      onCopy: () { unawaited(_copyMessage(message)); },
       onDeleteForMe: () { widget.dataStore.deleteMessage(widget.conversationId, message.id, forEveryone: false); Navigator.of(sheetContext).pop(); },
       onDeleteForEveryone: isMine ? () { widget.dataStore.deleteMessage(widget.conversationId, message.id, forEveryone: true); Navigator.of(sheetContext).pop(); } : null,
-      onReport: () { Navigator.of(sheetContext).pop(); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Report submitted'))); },
+      onReport: () { unawaited(_reportMessage(message)); },
       onCreateTask: () { Navigator.of(sheetContext).pop(); _openCreateTaskModal(initialTitle: message.text, sourceMessageId: message.id); },
     ));
   }
