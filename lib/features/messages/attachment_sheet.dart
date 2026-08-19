@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../ui/core/theme/theme_config.dart';
+import '../../ui/core/theme/theme_config.dart';
 
 class AttachmentSheet extends StatelessWidget {
   final ThemeConfig theme;
