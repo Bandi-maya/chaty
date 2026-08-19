@@ -32,6 +32,42 @@ class ChatyUx {
   }) {
     return reducedMotion(context) ? Duration.zero : standard;
   }
+
+  /// Applies interaction requirements that must be consistent across every
+  /// visual theme and every one of the configurable component variants.
+  static ThemeData enforceTheme(ThemeData base) {
+    const minimum = WidgetStatePropertyAll<Size>(Size(minTouchTarget, minTouchTarget));
+    return base.copyWith(
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+      visualDensity: VisualDensity.standard,
+      focusColor: base.colorScheme.primary.withValues(alpha: 0.18),
+      hoverColor: base.colorScheme.primary.withValues(alpha: 0.08),
+      iconButtonTheme: IconButtonThemeData(
+        style: (base.iconButtonTheme.style ?? const ButtonStyle()).copyWith(minimumSize: minimum),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: (base.elevatedButtonTheme.style ?? const ButtonStyle()).copyWith(minimumSize: minimum),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: (base.filledButtonTheme.style ?? const ButtonStyle()).copyWith(minimumSize: minimum),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: (base.outlinedButtonTheme.style ?? const ButtonStyle()).copyWith(minimumSize: minimum),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: (base.textButtonTheme.style ?? const ButtonStyle()).copyWith(minimumSize: minimum),
+      ),
+      listTileTheme: base.listTileTheme.copyWith(
+        minVerticalPadding: 8,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      ),
+      tooltipTheme: base.tooltipTheme.copyWith(
+        waitDuration: const Duration(milliseconds: 450),
+        showDuration: const Duration(seconds: 3),
+        preferBelow: false,
+      ),
+    );
+  }
 }
 
 class ChatyResponsiveContent extends StatelessWidget {
