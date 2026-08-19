@@ -1,0 +1,89 @@
+import 'package:flutter/material.dart';
+
+class SettingsSearchResult {
+  final String title;
+  final String category;
+  final String description;
+  final IconData icon;
+  final Widget destination;
+
+  const SettingsSearchResult({
+    required this.title,
+    required this.category,
+    required this.description,
+    required this.icon,
+    required this.destination,
+  });
+}
+
+class SettingsSearchDelegate extends SearchDelegate<SettingsSearchResult?> {
+  final List<SettingsSearchResult> allSettings;
+
+  SettingsSearchDelegate({required this.allSettings});
+
+  @override
+  List<Widget>? buildActions(BuildContext context) {
+    return [
+      if (query.isNotEmpty)
+        IconButton(
+          icon: const Icon(Icons.clear_rounded),
+          onPressed: () => query = '',
+        ),
+    ];
+  }
+
+  @override
+  Widget? buildLeading(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back_rounded),
+      onPressed: () => close(context, null),
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) => _buildSearchResults(context);
+
+  @override
+  Widget buildSuggestions(BuildContext context) => _buildSearchResults(context);
+
+  Widget _buildSearchResults(BuildContext context) {
+    final clean = query.trim().toLowerCase();
+    final matches = clean.isEmpty
+        ? allSettings
+        : allSettings.where((item) {
+            return item.title.toLowerCase().contains(clean) ||
+                item.category.toLowerCase().contains(clean) ||
+                item.description.toLowerCase().contains(clean);
+          }).toList();
+
+    if (matches.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.search_off_rounded, size: 48, color: Colors.grey),
+            const SizedBox(height: 12),
+            Text('No settings found for "$query"', style: const TextStyle(color: Colors.grey)),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: matches.length,
+      itemBuilder: (ctx, idx) {
+        final item = matches[idx];
+        return ListTile(
+          leading: Icon(item.icon, color: Theme.of(context).colorScheme.primary),
+          title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+          subtitle: Text('${item.category} • ${item.description}'),
+          trailing: const Icon(Icons.chevron_right_rounded),
+          onTap: () {
+            close(context, item);
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => item.destination));
+          },
+        );
+      },
+    );
+  }
+}
