@@ -61,7 +61,7 @@ class PremiumNavigationBar extends StatelessWidget {
   Color get _muted => theme.secondaryTextColor;
   Color get _text => theme.primaryTextColor;
 
-  Widget _shell(Widget child, {double horizontal = 12, double bottom = 10, bool extend = true}) {
+  Widget _shell(Widget child, {double horizontal = 12, double bottom = 10}) {
     return SafeArea(
       minimum: EdgeInsets.only(bottom: metrics.isShort ? 0 : 2),
       child: Padding(
