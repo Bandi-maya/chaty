@@ -490,7 +490,7 @@ class _ActivityTreeNode extends StatelessWidget {
                           activity.action,
                           style: TextStyle(
                             color: theme.primaryTextColor,
-                            fontWeight: FontWeight.w650,
+                            fontWeight: FontWeight.w600,
                             fontSize: 12.5,
                           ),
                         ),
