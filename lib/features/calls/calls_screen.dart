@@ -27,10 +27,7 @@ class _CallsScreenState extends State<CallsScreen> {
   @override
   void initState() {
     super.initState();
-    _callsStream = Supabase.instance.client
-        .from('call_sessions')
-        .stream(primaryKey: const <String>['id'])
-        .order('started_at', ascending: false);
+    _callsStream = Supabase.instance.client.from('call_sessions').stream(primaryKey: const <String>['id']).order('started_at', ascending: false);
   }
 
   String _formatTime(DateTime dt) {
@@ -50,21 +47,12 @@ class _CallsScreenState extends State<CallsScreen> {
 
   Future<void> _startFromConversation(Conversation conversation, UserProfile peer, bool video) async {
     final service = ChatyCallService();
-    await Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ChatyCallScreen(
-        theme: locator<ThemeController>().runtimeTheme,
-        callService: service,
-        title: peer.displayName,
-        conversationId: conversation.id,
-        peerUserId: peer.id,
-        isVideo: video,
-      ),
-    ));
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => ChatyCallScreen(theme: locator<ThemeController>().globalTheme, callService: service, title: peer.displayName, conversationId: conversation.id, peerUserId: peer.id, isVideo: video)));
     service.dispose();
   }
 
   Future<void> _showNewCallSheet() async {
-    final theme = locator<ThemeController>().runtimeTheme;
+    final theme = locator<ThemeController>().globalTheme;
     final direct = widget.dataStore.conversations.where((c) => c.type == ConversationType.direct).toList(growable: false);
     if (direct.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Start a direct conversation before calling.')));
@@ -101,7 +89,7 @@ class _CallsScreenState extends State<CallsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = locator<ThemeController>().runtimeTheme;
+    final theme = locator<ThemeController>().globalTheme;
     return Scaffold(
       backgroundColor: theme.backgroundColor,
       body: SafeArea(
@@ -117,12 +105,8 @@ class _CallsScreenState extends State<CallsScreen> {
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _callsStream,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                  return Center(child: CircularProgressIndicator(color: theme.accentColor));
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Unable to load call history: ${snapshot.error}', textAlign: TextAlign.center, style: TextStyle(color: theme.dangerColor))));
-                }
+                if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) return Center(child: CircularProgressIndicator(color: theme.accentColor));
+                if (snapshot.hasError) return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Unable to load call history: ${snapshot.error}', textAlign: TextAlign.center, style: TextStyle(color: theme.dangerColor))));
                 final calls = (snapshot.data ?? const <Map<String, dynamic>>[]).map((row) => ChatyCallSession.fromRow(Map<String, dynamic>.from(row))).toList(growable: false);
                 if (calls.isEmpty) {
                   return Center(child: Padding(padding: const EdgeInsets.all(28), child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -132,28 +116,14 @@ class _CallsScreenState extends State<CallsScreen> {
                   ])));
                 }
                 return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(10, 4, 10, 92),
-                  itemCount: calls.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  padding: const EdgeInsets.fromLTRB(10, 4, 10, 92), itemCount: calls.length, separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (context, index) {
-                    final call = calls[index];
-                    final peer = _peer(call);
-                    final conversation = _conversation(call);
-                    final mine = call.callerId == widget.dataStore.currentUser.id;
-                    final missed = call.status == 'declined' || (call.status == 'ended' && call.connectedAt == null);
+                    final call = calls[index]; final peer = _peer(call); final conversation = _conversation(call); final mine = call.callerId == widget.dataStore.currentUser.id; final missed = call.status == 'declined' || (call.status == 'ended' && call.connectedAt == null);
                     return ListTile(
                       leading: AppAvatar(initials: peer?.avatarInitials ?? 'C', colorHex: peer?.avatarColorHex ?? '0xFF6366F1', size: 44),
                       title: Text(peer?.displayName ?? 'Chaty user', style: TextStyle(color: missed ? theme.dangerColor : theme.primaryTextColor, fontWeight: FontWeight.w700)),
-                      subtitle: Row(children: [
-                        Icon(missed ? Icons.call_missed_rounded : mine ? Icons.call_made_rounded : Icons.call_received_rounded, size: 14, color: missed ? theme.dangerColor : theme.secondaryTextColor),
-                        const SizedBox(width: 5),
-                        Flexible(child: Text('${call.isVideo ? 'Video' : 'Voice'} • ${_formatTime(call.startedAt)} • ${call.status}', overflow: TextOverflow.ellipsis, style: TextStyle(color: theme.secondaryTextColor, fontSize: 12))),
-                      ]),
-                      trailing: conversation == null || peer == null ? null : IconButton(
-                        tooltip: call.isVideo ? 'Video call again' : 'Voice call again',
-                        icon: Icon(call.isVideo ? Icons.videocam_rounded : Icons.call_rounded, color: theme.accentColor),
-                        onPressed: () => _startFromConversation(conversation, peer, call.isVideo),
-                      ),
+                      subtitle: Row(children: [Icon(missed ? Icons.call_missed_rounded : mine ? Icons.call_made_rounded : Icons.call_received_rounded, size: 14, color: missed ? theme.dangerColor : theme.secondaryTextColor), const SizedBox(width: 5), Flexible(child: Text('${call.isVideo ? 'Video' : 'Voice'} • ${_formatTime(call.startedAt)} • ${call.status}', overflow: TextOverflow.ellipsis, style: TextStyle(color: theme.secondaryTextColor, fontSize: 12)))]),
+                      trailing: conversation == null || peer == null ? null : IconButton(tooltip: call.isVideo ? 'Video call again' : 'Voice call again', icon: Icon(call.isVideo ? Icons.videocam_rounded : Icons.call_rounded, color: theme.accentColor), onPressed: () => _startFromConversation(conversation, peer, call.isVideo)),
                     );
                   },
                 );
