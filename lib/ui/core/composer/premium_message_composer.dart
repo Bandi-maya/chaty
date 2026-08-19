@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../controllers/chaty_preferences_controller.dart';
 import '../theme/theme_config.dart';
 
 class PremiumMessageComposer extends StatelessWidget {
   final int styleIndex;
   final ThemeConfig theme;
+  final ChatyPreferencesController preferencesController;
   final TextEditingController controller;
   final VoidCallback onAttach;
   final VoidCallback onSend;
@@ -16,6 +18,7 @@ class PremiumMessageComposer extends StatelessWidget {
     super.key,
     required this.styleIndex,
     required this.theme,
+    required this.preferencesController,
     required this.controller,
     required this.onAttach,
     required this.onSend,
@@ -25,30 +28,21 @@ class PremiumMessageComposer extends StatelessWidget {
   });
 
   int get _index => styleIndex.clamp(0, 19);
+  Color get _surface => preferencesController.gbColor('BGColor') ?? theme.surfaceColor;
+  Color get _entry => preferencesController.gbColor('ModChatEntry') ?? theme.cardColor;
+  Color get _text => preferencesController.gbColor('ModChatTextColor') ?? theme.primaryTextColor;
+  Color get _attach => preferencesController.gbColor('ModChatBtnColor') ?? theme.accentColor;
+  Color get _emoji => preferencesController.gbColor('ModChatEmojiColor') ?? theme.secondaryTextColor;
+  Color get _sendBackground => preferencesController.gbColor('ModChaSendBKColor') ?? theme.accentColor;
+  Color get _sendForeground => preferencesController.gbColor('ModChaSendColor') ?? theme.onAccentColor;
 
   @override
   Widget build(BuildContext context) {
     final variants = <Widget>[
-      _pill(context),
-      _classic(context),
-      _compact(context),
-      _floatingCard(context),
-      _outlined(context),
-      _soft(context),
-      _splitActions(context),
-      _minimal(context),
-      _boxed(context),
-      _centerSend(context),
-      _stacked(context),
-      _editorial(context),
-      _edge(context),
-      _dense(context),
-      _wide(context),
-      _slim(context),
-      _toolbar(context),
-      _workspace(context),
-      _focus(context),
-      _expressive(context),
+      _pill(context), _classic(context), _compact(context), _floatingCard(context), _outlined(context),
+      _soft(context), _splitActions(context), _minimal(context), _boxed(context), _centerSend(context),
+      _stacked(context), _editorial(context), _edge(context), _dense(context), _wide(context),
+      _slim(context), _toolbar(context), _workspace(context), _focus(context), _expressive(context),
     ];
     return variants[_index];
   }
@@ -56,7 +50,7 @@ class PremiumMessageComposer extends StatelessWidget {
   Widget _shell(Widget child, {EdgeInsets padding = const EdgeInsets.fromLTRB(8, 7, 8, 7), Color? color, Border? border}) {
     return Container(
       padding: padding,
-      decoration: BoxDecoration(color: color ?? theme.surfaceColor, border: border),
+      decoration: BoxDecoration(color: color ?? _surface, border: border),
       child: SafeArea(top: false, child: child),
     );
   }
@@ -68,61 +62,59 @@ class PremiumMessageComposer extends StatelessWidget {
       maxLines: maxLines,
       onChanged: onChanged,
       textInputAction: TextInputAction.newline,
-      style: TextStyle(color: theme.primaryTextColor, fontSize: 14 * theme.fontScale),
+      style: TextStyle(color: _text, fontSize: 14 * theme.fontScale),
       decoration: InputDecoration(
         hintText: hint ?? 'Message…  /task or #reply',
         hintStyle: TextStyle(color: theme.secondaryTextColor),
         filled: filled,
-        fillColor: filled ? theme.cardColor : Colors.transparent,
+        fillColor: filled ? _entry : Colors.transparent,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(radius), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(radius), borderSide: filled ? BorderSide.none : BorderSide(color: theme.cardColor)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(radius), borderSide: BorderSide(color: theme.accentColor, width: 1.2)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(radius), borderSide: filled ? BorderSide.none : BorderSide(color: _entry)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(radius), borderSide: BorderSide(color: _attach, width: 1.2)),
         isDense: true,
         contentPadding: padding ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
     );
   }
 
-  Widget _actionButton({required IconData icon, required String tooltip, required VoidCallback onPressed, bool filled = false, double size = 42}) {
+  Widget _actionButton({required IconData icon, required String tooltip, required VoidCallback onPressed, bool filled = false, double size = 44}) {
+    final target = size < 44 ? 44.0 : size;
+    final actionColor = tooltip == 'Emoji' ? _emoji : _attach;
     final child = Icon(icon, size: 20);
     if (filled) {
       return SizedBox(
-        width: size,
-        height: size,
+        width: target,
+        height: target,
         child: IconButton.filled(
           tooltip: tooltip,
-          style: IconButton.styleFrom(backgroundColor: theme.accentColor, foregroundColor: theme.onAccentColor),
+          style: IconButton.styleFrom(backgroundColor: actionColor, foregroundColor: _sendForeground),
           onPressed: onPressed,
           icon: child,
         ),
       );
     }
     return SizedBox(
-      width: size,
-      height: size,
-      child: IconButton(
-        tooltip: tooltip,
-        color: theme.secondaryTextColor,
-        onPressed: onPressed,
-        icon: child,
-      ),
+      width: target,
+      height: target,
+      child: IconButton(tooltip: tooltip, color: actionColor, onPressed: onPressed, icon: child),
     );
   }
 
   Widget _sendOrVoice({double size = 44, bool square = false}) {
+    final target = size < 44 ? 44.0 : size;
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
       builder: (context, value, _) {
         final hasText = value.text.trim().isNotEmpty;
         return SizedBox(
-          width: size,
-          height: size,
+          width: target,
+          height: target,
           child: IconButton.filled(
             tooltip: hasText ? 'Send' : 'Voice note',
             style: IconButton.styleFrom(
-              backgroundColor: theme.accentColor,
-              foregroundColor: theme.onAccentColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(square ? 12 : size / 2)),
+              backgroundColor: _sendBackground,
+              foregroundColor: _sendForeground,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(square ? 12 : target / 2)),
             ),
             onPressed: hasText ? onSend : onVoice,
             icon: Icon(hasText ? Icons.send_rounded : Icons.mic_rounded, size: 19),
@@ -137,7 +129,7 @@ class PremiumMessageComposer extends StatelessWidget {
         Expanded(child: _field(context, radius: 24)),
         const SizedBox(width: 6),
         _sendOrVoice(),
-      ]), border: Border(top: BorderSide(color: theme.cardColor)));
+      ]), border: Border(top: BorderSide(color: _entry)));
 
   Widget _classic(BuildContext context) => _shell(Row(children: [
         _actionButton(icon: Icons.emoji_emotions_outlined, tooltip: 'Emoji', onPressed: onEmoji),
@@ -156,7 +148,7 @@ class PremiumMessageComposer extends StatelessWidget {
   Widget _floatingCard(BuildContext context) => _shell(Container(
         margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
         padding: const EdgeInsets.all(7),
-        decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(22), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 18, offset: const Offset(0, 6))]),
+        decoration: BoxDecoration(color: _entry, borderRadius: BorderRadius.circular(22), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 18, offset: const Offset(0, 6))]),
         child: Row(children: [
           _actionButton(icon: Icons.add_rounded, tooltip: 'Attach', onPressed: onAttach, size: 40),
           Expanded(child: _field(context, filled: false, radius: 18)),
@@ -167,7 +159,7 @@ class PremiumMessageComposer extends StatelessWidget {
 
   Widget _outlined(BuildContext context) => _shell(Row(children: [
         Expanded(child: Container(
-          decoration: BoxDecoration(border: Border.all(color: theme.accentColor.withValues(alpha: 0.35)), borderRadius: BorderRadius.circular(18)),
+          decoration: BoxDecoration(border: Border.all(color: _attach.withValues(alpha: 0.35)), borderRadius: BorderRadius.circular(18)),
           child: Row(children: [
             _actionButton(icon: Icons.attach_file_rounded, tooltip: 'Attach', onPressed: onAttach, size: 40),
             Expanded(child: _field(context, filled: false, radius: 18)),
@@ -183,7 +175,7 @@ class PremiumMessageComposer extends StatelessWidget {
         Expanded(child: _field(context, radius: 28)),
         const SizedBox(width: 6),
         _sendOrVoice(),
-      ]), color: theme.cardColor.withValues(alpha: 0.45));
+      ]), color: _entry.withValues(alpha: 0.45));
 
   Widget _splitActions(BuildContext context) => _shell(Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         Column(mainAxisSize: MainAxisSize.min, children: [
@@ -199,11 +191,11 @@ class PremiumMessageComposer extends StatelessWidget {
         Expanded(child: _field(context, radius: 0, filled: false, hint: 'Type a message')),
         _actionButton(icon: Icons.add_rounded, tooltip: 'Attach', onPressed: onAttach),
         _sendOrVoice(size: 40),
-      ]), border: Border(top: BorderSide(color: theme.cardColor)));
+      ]), border: Border(top: BorderSide(color: _entry)));
 
   Widget _boxed(BuildContext context) => _shell(Container(
         padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(color: _entry, borderRadius: BorderRadius.circular(12)),
         child: Row(children: [
           _actionButton(icon: Icons.attach_file_rounded, tooltip: 'Attach', onPressed: onAttach, size: 38),
           Expanded(child: _field(context, filled: false, radius: 8)),
@@ -233,7 +225,7 @@ class PremiumMessageComposer extends StatelessWidget {
 
   Widget _editorial(BuildContext context) => _shell(Row(children: [
         Expanded(child: _field(context, radius: 6, filled: false, hint: 'Write a message…')),
-        Container(width: 1, height: 30, color: theme.cardColor),
+        Container(width: 1, height: 30, color: _entry),
         _actionButton(icon: Icons.attach_file_rounded, tooltip: 'Attach', onPressed: onAttach),
         _sendOrVoice(size: 42, square: true),
       ]));
@@ -243,7 +235,7 @@ class PremiumMessageComposer extends StatelessWidget {
         _actionButton(icon: Icons.emoji_emotions_outlined, tooltip: 'Emoji', onPressed: onEmoji, size: 40),
         _actionButton(icon: Icons.attach_file_rounded, tooltip: 'Attach', onPressed: onAttach, size: 40),
         _sendOrVoice(size: 40, square: true),
-      ]), padding: const EdgeInsets.fromLTRB(12, 5, 4, 5), border: Border(top: BorderSide(color: theme.cardColor)));
+      ]), padding: const EdgeInsets.fromLTRB(12, 5, 4, 5), border: Border(top: BorderSide(color: _entry)));
 
   Widget _dense(BuildContext context) => _shell(Row(children: [
         _actionButton(icon: Icons.add_rounded, tooltip: 'Attach', onPressed: onAttach, size: 34),
@@ -281,7 +273,7 @@ class PremiumMessageComposer extends StatelessWidget {
 
   Widget _workspace(BuildContext context) => _shell(Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         Container(
-          decoration: BoxDecoration(color: theme.cardColor, borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(color: _entry, borderRadius: BorderRadius.circular(12)),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             _actionButton(icon: Icons.add_rounded, tooltip: 'Attach', onPressed: onAttach, size: 38),
             _actionButton(icon: Icons.emoji_emotions_outlined, tooltip: 'Emoji', onPressed: onEmoji, size: 38),
@@ -304,7 +296,7 @@ class PremiumMessageComposer extends StatelessWidget {
                 ? _sendOrVoice()
                 : PopupMenuButton<String>(
                     tooltip: 'Message actions',
-                    icon: Icon(Icons.add_circle_outline_rounded, color: theme.accentColor),
+                    icon: Icon(Icons.add_circle_outline_rounded, color: _attach),
                     onSelected: (value) {
                       if (value == 'attach') onAttach();
                       if (value == 'emoji') onEmoji();
@@ -323,9 +315,9 @@ class PremiumMessageComposer extends StatelessWidget {
   Widget _expressive(BuildContext context) => _shell(Container(
         padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
         decoration: BoxDecoration(
-          color: theme.cardColor,
+          color: _entry,
           borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: theme.accentColor.withValues(alpha: 0.18)),
+          border: Border.all(color: _attach.withValues(alpha: 0.18)),
         ),
         child: Row(children: [
           _actionButton(icon: Icons.add_circle_rounded, tooltip: 'Attach', onPressed: onAttach, size: 42),
