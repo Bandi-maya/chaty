@@ -23,8 +23,17 @@ class ChatySettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final canPop = Navigator.canPop(context);
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
+        leading: canPop
+            ? IconButton(
+                tooltip: 'Back',
+                icon: const Icon(Icons.chevron_left_rounded),
+                onPressed: () => Navigator.maybePop(context),
+              )
+            : null,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -634,7 +643,7 @@ class ChatyDangerTile extends StatelessWidget {
       title: title,
       subtitle: subtitle,
       onTap: onTap,
-      trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.redAccent, size: 16),
+      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.redAccent, size: 20),
     );
   }
 }
