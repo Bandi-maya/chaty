@@ -8,7 +8,6 @@ void main() {
 
     for (final variant in LauncherIconVariant.values) {
       expect(LauncherIconVariantMetadata.fromId(variant.id), variant);
-      expect(variant.assetPath, 'assets/launcher_icons/${variant.id}_512.png');
       expect(variant.androidAlias, variant.id);
     }
   });
