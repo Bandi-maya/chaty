@@ -35,6 +35,7 @@ class _TasksScreenState extends State<TasksScreen>
     _KanbanColumn(TaskStatus.inProgress, 'In progress'),
     _KanbanColumn(TaskStatus.blocked, 'Blocked'),
     _KanbanColumn(TaskStatus.completed, 'Completed'),
+    _KanbanColumn(TaskStatus.archived, 'Archived'),
   ];
 
   @override
@@ -537,7 +538,7 @@ class _KanbanTaskCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: theme.primaryTextColor,
-                  fontWeight: FontWeight.w650,
+                  fontWeight: FontWeight.w600,
                   fontSize: 12.8 * theme.fontScale,
                 ),
               ),
