@@ -14,6 +14,10 @@ class AppearanceVariantController extends ChangeNotifier {
     'Floating Pill','Classic Input','Compact Input','Floating Card','Outlined Composer','Soft Composer','Split Actions','Minimal Line','Boxed Composer','Center Send','Stacked Composer','Editorial Line','Edge Composer','Dense Composer','Wide Composer','Slim Composer','Toolbar Composer','Workspace Composer','Focus Composer','Expressive Composer',
   ];
 
+  static const List<String> callUiStyles = <String>[
+    'Floating Dock','Classic Bottom','Compact Dock','Split Controls','Outlined Dock','Soft Capsule','Icon Deck','Label Deck','Minimal Controls','Raised End','Segmented Controls','Inset Panel','Flat Controls','Dense Controls','Wide Capsule','Slim Capsule','Card Controls','Edge Controls','Workspace Controls','Focus Controls',
+  ];
+
   static const List<String> appIconStyles = <String>[
     'Chaty Original','Outline Chat','Solid Chat','Soft Square','Circle Chat','Monochrome','High Contrast','Minimal Mark','Rounded Mark','Sharp Mark','Message Stack','Double Bubble','Wave Bubble','Bolt Chat','Orbit Chat','Pixel Chat','Business Chat','Creator Chat','Privacy Chat','Focus Chat',
   ];
@@ -37,6 +41,7 @@ class AppearanceVariantController extends ChangeNotifier {
   String _navigationStyle = navigationStyles.first;
   String _bottomBarStyle = bottomBarStyles.first;
   String _composerStyle = composerStyles.first;
+  String _callUiStyle = callUiStyles.first;
   String _appIconStyle = appIconStyles.first;
   String _notificationIconStyle = notificationIconStyles.first;
   String _typographyStyle = typographyStyles.first;
@@ -51,6 +56,7 @@ class AppearanceVariantController extends ChangeNotifier {
   String get navigationStyle => _navigationStyle;
   String get bottomBarStyle => _bottomBarStyle;
   String get composerStyle => _composerStyle;
+  String get callUiStyle => _callUiStyle;
   String get appIconStyle => _appIconStyle;
   String get notificationIconStyle => _notificationIconStyle;
   String get typographyStyle => _typographyStyle;
@@ -61,6 +67,7 @@ class AppearanceVariantController extends ChangeNotifier {
   int get navigationIndex => navigationStyles.indexOf(_navigationStyle).clamp(0, navigationStyles.length - 1);
   int get bottomBarIndex => bottomBarStyles.indexOf(_bottomBarStyle).clamp(0, bottomBarStyles.length - 1);
   int get composerIndex => composerStyles.indexOf(_composerStyle).clamp(0, composerStyles.length - 1);
+  int get callUiIndex => callUiStyles.indexOf(_callUiStyle).clamp(0, callUiStyles.length - 1);
   int get typographyIndex => typographyStyles.indexOf(_typographyStyle).clamp(0, typographyStyles.length - 1);
 
   double get textScale {
@@ -73,6 +80,7 @@ class AppearanceVariantController extends ChangeNotifier {
     _navigationStyle = _validated(prefs.getString('appearance.navigation'), navigationStyles);
     _bottomBarStyle = _validated(prefs.getString('appearance.bottomBar'), bottomBarStyles);
     _composerStyle = _validated(prefs.getString('appearance.composer'), composerStyles);
+    _callUiStyle = _validated(prefs.getString('appearance.callUi'), callUiStyles);
     _appIconStyle = _validated(prefs.getString('appearance.appIcon'), appIconStyles);
     _notificationIconStyle = _validated(prefs.getString('appearance.notificationIcon'), notificationIconStyles);
     _typographyStyle = _validated(prefs.getString('appearance.typography'), typographyStyles);
@@ -87,6 +95,7 @@ class AppearanceVariantController extends ChangeNotifier {
   Future<void> setNavigationStyle(String value) => _set(value: value, options: navigationStyles, key: 'appearance.navigation', apply: (next) => _navigationStyle = next);
   Future<void> setBottomBarStyle(String value) => _set(value: value, options: bottomBarStyles, key: 'appearance.bottomBar', apply: (next) => _bottomBarStyle = next);
   Future<void> setComposerStyle(String value) => _set(value: value, options: composerStyles, key: 'appearance.composer', apply: (next) => _composerStyle = next);
+  Future<void> setCallUiStyle(String value) => _set(value: value, options: callUiStyles, key: 'appearance.callUi', apply: (next) => _callUiStyle = next);
   Future<void> setAppIconStyle(String value) => _set(value: value, options: appIconStyles, key: 'appearance.appIcon', apply: (next) => _appIconStyle = next);
   Future<void> setNotificationIconStyle(String value) => _set(value: value, options: notificationIconStyles, key: 'appearance.notificationIcon', apply: (next) => _notificationIconStyle = next);
   Future<void> setTypographyStyle(String value) => _set(value: value, options: typographyStyles, key: 'appearance.typography', apply: (next) => _typographyStyle = next);
