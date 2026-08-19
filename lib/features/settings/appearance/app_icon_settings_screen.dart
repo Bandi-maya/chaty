@@ -287,10 +287,7 @@ class _LauncherIconOption extends StatelessWidget {
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(15),
-                      child: Image.asset(variant.assetPath, width: 64, height: 64, fit: BoxFit.cover),
-                    ),
+                    LauncherIconPreview(variant: variant, size: 64, borderRadius: 15),
                     if (selected)
                       Positioned(
                         right: -5,
@@ -494,11 +491,17 @@ class _SafeAreaGuidePainter extends CustomPainter {
       ..strokeWidth = 1.5;
     final inset = size.shortestSide * 0.11;
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(inset, inset, size.width - inset * 2, size.height - inset * 2), const Radius.circular(42)),
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(inset, inset, size.width - inset * 2, size.height - inset * 2),
+        const Radius.circular(42),
+      ),
       paint,
     );
     final circleInset = size.shortestSide * 0.18;
-    canvas.drawOval(Rect.fromLTWH(circleInset, circleInset, size.width - circleInset * 2, size.height - circleInset * 2), paint);
+    canvas.drawOval(
+      Rect.fromLTWH(circleInset, circleInset, size.width - circleInset * 2, size.height - circleInset * 2),
+      paint,
+    );
   }
 
   @override
