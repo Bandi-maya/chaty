@@ -50,10 +50,11 @@ class MessagePresentationStyle {
 
   factory MessagePresentationStyle.resolve(ThemeConfig theme, ChatyPreferencesController prefs) {
     final requested = prefs.gbString('bubble_style', fallback: prefs.conversation.bubbleShape).toLowerCase();
-    final radius = prefs.conversation.bubbleRadius.clamp(2.0, 32.0);
+    final radius = prefs.conversation.bubbleRadius.clamp(2.0, 32.0).toDouble();
+    final horizontalPadding = prefs.conversation.bubblePadding.clamp(7.0, 22.0).toDouble();
     BorderRadius incoming;
     BorderRadius outgoing;
-    EdgeInsets padding = EdgeInsets.symmetric(horizontal: prefs.conversation.bubblePadding.clamp(7.0, 22.0), vertical: 8);
+    EdgeInsets padding = EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 8);
     double width = .78;
     bool elevated = false;
 
@@ -93,8 +94,8 @@ class MessagePresentationStyle {
     }
 
     Color color(String key, Color fallback) => prefs.gbColor(key) ?? fallback;
-    final textSize = prefs.gbDouble('text_size_pick', fallback: 14).clamp(10.0, 24.0);
-    final avatarSize = prefs.gbDouble('pic_chat_size_pickerV2', fallback: 28).clamp(22.0, 48.0);
+    final textSize = prefs.gbDouble('text_size_pick', fallback: 14).clamp(10.0, 24.0).toDouble();
+    final avatarSize = prefs.gbDouble('pic_chat_size_pickerV2', fallback: 28).clamp(22.0, 48.0).toDouble();
     final picInside = prefs.gbBool('pic_inside');
 
     return MessagePresentationStyle(
