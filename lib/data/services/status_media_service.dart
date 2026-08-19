@@ -37,15 +37,9 @@ class StatusMediaService {
       _ => FileType.any,
     };
 
-    final result = await FilePicker().pickFiles(
-      type: pickerType,
-      allowMultiple: false,
-      withData: false,
-      withReadStream: false,
-    );
-    if (result == null || result.files.isEmpty) return null;
+    final picked = await FilePicker.pickFile(type: pickerType);
+    if (picked == null) return null;
 
-    final picked = result.files.single;
     final path = picked.path;
     if (path == null || path.isEmpty) {
       throw Exception('The selected file is not accessible on this device.');
@@ -67,13 +61,15 @@ class StatusMediaService {
     final safeName = picked.name
         .replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')
         .replaceAll(RegExp(r'_+'), '_');
-    final storagePath = '${user.id}/${_uuid.v4()}_${safeName.isEmpty ? 'status' : safeName}';
-    final mimeType = lookupMimeType(path) ?? switch (mediaType) {
-      'image' => 'image/jpeg',
-      'video' => 'video/mp4',
-      'audio' => 'audio/mp4',
-      _ => 'application/octet-stream',
-    };
+    final storagePath =
+        '${user.id}/${_uuid.v4()}_${safeName.isEmpty ? 'status' : safeName}';
+    final mimeType = lookupMimeType(path) ??
+        switch (mediaType) {
+          'image' => 'image/jpeg',
+          'video' => 'video/mp4',
+          'audio' => 'audio/mp4',
+          _ => 'application/octet-stream',
+        };
 
     await _client.storage.from(bucket).upload(
           storagePath,
