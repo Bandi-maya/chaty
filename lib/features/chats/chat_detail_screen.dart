@@ -394,9 +394,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     itemCount: contacts.length,
                     itemBuilder: (_, index) {
                       final contact = contacts[index];
-                      final name = contact.displayName.trim().isEmpty
+                      final displayName = (contact.displayName ?? '').trim();
+                      final name = displayName.isEmpty
                           ? 'Unnamed contact'
-                          : contact.displayName.trim();
+                          : displayName;
                       return ListTile(
                         leading: const CircleAvatar(
                           child: Icon(Icons.person_outline_rounded),
@@ -414,9 +415,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         ),
       );
       if (selected == null) return;
-      final name = selected.displayName.trim().isEmpty
+      final selectedDisplayName = (selected.displayName ?? '').trim();
+      final name = selectedDisplayName.isEmpty
           ? 'Unnamed contact'
-          : selected.displayName.trim();
+          : selectedDisplayName;
       await widget.dataStore.sendMessage(
         conversationId: widget.conversationId,
         type: MessageType.contact,
@@ -557,7 +559,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       final seconds = DateTime.now()
           .difference(_recordingStartedAt ?? DateTime.now())
           .inSeconds
-          .clamp(1, 3600);
+          .clamp(1, 3600)
+          .toInt();
       final attachment = await _mediaService.uploadFile(
         conversationId: widget.conversationId,
         type: 'audio',
@@ -1024,7 +1027,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               child: GestureDetector(
                 onTap: () async {
                   final next = await dataStore.getOrCreateDirectConversation(contact);
-                  if (!mounted) return;
+                  if (!context.mounted) return;
                   Navigator.of(context).pushReplacement(
                     MaterialPageRoute<void>(
                       builder: (_) => ChatDetailScreen(
