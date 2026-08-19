@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/models/chat_message.dart';
 import '../../domain/models/chat_task.dart';
@@ -66,8 +67,10 @@ class MockDataStore extends ChangeNotifier {
   Future<void> ensureConversationLoaded(String conversationId) =>
       _backend.ensureConversationLoaded(conversationId);
 
-  Future<List<UserProfile>> searchUsersRemote(String query,
-          {bool includeSelf = false}) =>
+  Future<List<UserProfile>> searchUsersRemote(
+    String query, {
+    bool includeSelf = false,
+  }) =>
       _backend.searchUsersRemote(query, includeSelf: includeSelf);
 
   Future<Conversation> getOrCreateDirectConversation(UserProfile user) =>
@@ -104,8 +107,11 @@ class MockDataStore extends ChangeNotifier {
   void toggleReaction(String conversationId, String messageId, String emoji) =>
       _backend.toggleReaction(conversationId, messageId, emoji);
 
-  void deleteMessage(String conversationId, String messageId,
-          {bool forEveryone = false}) =>
+  void deleteMessage(
+    String conversationId,
+    String messageId, {
+    bool forEveryone = false,
+  }) =>
       _backend.deleteMessage(
         conversationId,
         messageId,
@@ -116,37 +122,66 @@ class MockDataStore extends ChangeNotifier {
       unawaited(_backend.markAsRead(conversationId));
 
   void togglePinConversation(String conversationId) {
-    final conversation = conversations.where((item) => item.id == conversationId).firstOrNull;
+    final conversation =
+        conversations.where((item) => item.id == conversationId).firstOrNull;
     if (conversation != null) {
-      _backend.setConversationState(conversationId, 'pinned', !conversation.isPinned);
+      _backend.setConversationState(
+        conversationId,
+        'pinned',
+        !conversation.isPinned,
+      );
     }
   }
 
   void toggleArchiveConversation(String conversationId) {
-    final conversation = conversations.where((item) => item.id == conversationId).firstOrNull;
+    final conversation =
+        conversations.where((item) => item.id == conversationId).firstOrNull;
     if (conversation != null) {
-      _backend.setConversationState(conversationId, 'archived', !conversation.isArchived);
+      _backend.setConversationState(
+        conversationId,
+        'archived',
+        !conversation.isArchived,
+      );
     }
   }
 
   void toggleMuteConversation(String conversationId) {
-    final conversation = conversations.where((item) => item.id == conversationId).firstOrNull;
+    final conversation =
+        conversations.where((item) => item.id == conversationId).firstOrNull;
     if (conversation != null) {
-      _backend.setConversationState(conversationId, 'muted', !conversation.isMuted);
+      _backend.setConversationState(
+        conversationId,
+        'muted',
+        !conversation.isMuted,
+      );
     }
   }
 
   void togglePinMessage(String conversationId, String messageId) {
-    final message = getMessages(conversationId).where((item) => item.id == messageId).firstOrNull;
+    final message = getMessages(conversationId)
+        .where((item) => item.id == messageId)
+        .firstOrNull;
     if (message != null) {
-      _backend.setMessageState(conversationId, messageId, 'pinned', !message.isPinned);
+      _backend.setMessageState(
+        conversationId,
+        messageId,
+        'pinned',
+        !message.isPinned,
+      );
     }
   }
 
   void toggleStarMessage(String conversationId, String messageId) {
-    final message = getMessages(conversationId).where((item) => item.id == messageId).firstOrNull;
+    final message = getMessages(conversationId)
+        .where((item) => item.id == messageId)
+        .firstOrNull;
     if (message != null) {
-      _backend.setMessageState(conversationId, messageId, 'starred', !message.isStarred);
+      _backend.setMessageState(
+        conversationId,
+        messageId,
+        'starred',
+        !message.isStarred,
+      );
     }
   }
 
@@ -227,6 +262,29 @@ class MockDataStore extends ChangeNotifier {
         labels: labels,
       );
 
+  Future<void> updateTaskAsync({
+    required String taskId,
+    required String title,
+    required String description,
+    required List<String> assigneeIds,
+    required TaskPriority priority,
+    required DateTime dueAt,
+    List<String> labels = const <String>[],
+  }) async {
+    await Supabase.instance.client.rpc(
+      'update_chat_task',
+      params: <String, dynamic>{
+        'p_task_id': taskId,
+        'p_title': title.trim(),
+        'p_description': description.trim(),
+        'p_assignee_ids': assigneeIds,
+        'p_priority': _taskPriorityToDatabase(priority),
+        'p_due_at': dueAt.toUtc().toIso8601String(),
+        'p_labels': labels,
+      },
+    );
+  }
+
   void updateTaskStatus(String taskId, TaskStatus status) =>
       _backend.updateTaskStatus(taskId, status);
 
@@ -247,16 +305,31 @@ class MockDataStore extends ChangeNotifier {
     );
   }
 
-  void revokeLinkedDevice(String deviceId) => _backend.revokeLinkedDevice(deviceId);
+  void revokeLinkedDevice(String deviceId) =>
+      _backend.revokeLinkedDevice(deviceId);
 
   void updateProfile(UserProfile updated) =>
       unawaited(_backend.updateCurrentUser(updated));
   void updateCurrentUser(UserProfile updated) => updateProfile(updated);
-  Future<void> updateUser(UserProfile updated) => _backend.updateCurrentUser(updated);
+  Future<void> updateUser(UserProfile updated) =>
+      _backend.updateCurrentUser(updated);
 
   /// Kept only for binary/source compatibility with old screens. It no longer
   /// changes identity. Supabase Auth owns the active session.
   void switchDemoAccount(UserProfile user) {
     if (user.id == _backend.currentUser?.id) notifyListeners();
+  }
+
+  static String _taskPriorityToDatabase(TaskPriority priority) {
+    switch (priority) {
+      case TaskPriority.low:
+        return 'low';
+      case TaskPriority.medium:
+        return 'normal';
+      case TaskPriority.high:
+        return 'high';
+      case TaskPriority.urgent:
+        return 'urgent';
+    }
   }
 }
