@@ -28,21 +28,9 @@ class GbThemeOverrides {
       'list_bg_color',
       'ConvoBack',
     ]);
-    final surface = firstColor(<String>[
-      'ModChatColor',
-      'BGColor',
-      'HomeBarColor',
-    ]);
-    final primaryText = firstColor(<String>[
-      'ModConTextColor',
-      'HomeBarText',
-      'ModContactNameColor',
-    ]);
-    final secondaryText = firstColor(<String>[
-      'ModContactStatusColor',
-      'ModChatStatusColor',
-      'ModConTimeColor',
-    ]);
+    final surface = firstColor(<String>['ModChatColor', 'BGColor', 'HomeBarColor']);
+    final primaryText = firstColor(<String>['ModConTextColor', 'HomeBarText', 'ModContactNameColor']);
+    final secondaryText = firstColor(<String>['ModContactStatusColor', 'ModChatStatusColor', 'ModConTimeColor']);
     final outgoingBubble = firstColor(<String>['ModChatRightBubble']);
     final incomingBubble = firstColor(<String>['ModChatLeftBubble']);
     final outgoingText = firstColor(<String>['ModChatBubbleText', 'date_right_color']);
@@ -62,9 +50,7 @@ class GbThemeOverrides {
       cardColor: surface == null
           ? null
           : Color.alphaBlend(
-              base.brightness == Brightness.dark
-                  ? Colors.white.withValues(alpha: 0.045)
-                  : Colors.black.withValues(alpha: 0.025),
+              base.brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.045) : Colors.black.withValues(alpha: 0.025),
               surface,
             ),
       primaryTextColor: primaryText,
@@ -80,19 +66,35 @@ class GbThemeOverrides {
       bubbleStyle: bubbleStyle,
     );
 
-    // User customization must never make core content unreadable. Unsafe
-    // foreground overrides fall back to the selected theme while preserving
-    // unrelated valid choices.
-    final safePrimary = _ensureContrast(candidate.primaryTextColor, candidate.backgroundColor, base.primaryTextColor, 4.5);
-    final safeSecondary = _ensureContrast(candidate.secondaryTextColor, candidate.backgroundColor, base.secondaryTextColor, 3.0);
-    final safeOutgoing = _ensureContrast(candidate.outgoingTextColor, candidate.outgoingBubbleColor, base.outgoingTextColor, 3.5);
-    final safeIncoming = _ensureContrast(candidate.incomingTextColor, candidate.incomingBubbleColor, base.incomingTextColor, 3.5);
-
     return candidate.copyWith(
-      primaryTextColor: safePrimary,
-      secondaryTextColor: safeSecondary,
-      outgoingTextColor: safeOutgoing,
-      incomingTextColor: safeIncoming,
+      primaryTextColor: _ensureContrast(candidate.primaryTextColor, candidate.backgroundColor, base.primaryTextColor, 4.5),
+      secondaryTextColor: _ensureContrast(candidate.secondaryTextColor, candidate.backgroundColor, base.secondaryTextColor, 3.0),
+      outgoingTextColor: _ensureContrast(candidate.outgoingTextColor, candidate.outgoingBubbleColor, base.outgoingTextColor, 3.5),
+      incomingTextColor: _ensureContrast(candidate.incomingTextColor, candidate.incomingBubbleColor, base.incomingTextColor, 3.5),
+    );
+  }
+
+  /// Call-only visual tokens. These legacy GB controls must affect the active
+  /// call UI without leaking their colors into unrelated screens.
+  static ThemeConfig resolveCalls(ThemeConfig base, ChatyPreferencesController prefs) {
+    final background = prefs.gbColor('ModCallsBackground') ?? base.backgroundColor;
+    final requestedText = prefs.gbColor('ModCallsTextColor') ?? base.primaryTextColor;
+    final requestedIcons = prefs.gbColor('ModCallsIconColors') ?? base.accentColor;
+    final safeText = _ensureContrast(requestedText, background, base.primaryTextColor, 4.5);
+    final safeIcons = _ensureContrast(requestedIcons, background, base.accentColor, 3.0);
+    return base.copyWith(
+      backgroundColor: background,
+      surfaceColor: Color.alphaBlend(
+        base.brightness == Brightness.dark ? Colors.white.withValues(alpha: .08) : Colors.black.withValues(alpha: .04),
+        background,
+      ),
+      cardColor: Color.alphaBlend(
+        base.brightness == Brightness.dark ? Colors.white.withValues(alpha: .12) : Colors.black.withValues(alpha: .06),
+        background,
+      ),
+      primaryTextColor: safeText,
+      secondaryTextColor: safeText.withValues(alpha: .72),
+      accentColor: safeIcons,
     );
   }
 
@@ -106,12 +108,7 @@ class GbThemeOverrides {
     return null;
   }
 
-  static Color _ensureContrast(
-    Color foreground,
-    Color background,
-    Color fallback,
-    double minimum,
-  ) {
+  static Color _ensureContrast(Color foreground, Color background, Color fallback, double minimum) {
     if (ThemeConfig.calculateContrastRatio(foreground, background) >= minimum) return foreground;
     if (ThemeConfig.calculateContrastRatio(fallback, background) >= minimum) return fallback;
     return background.computeLuminance() > 0.45 ? Colors.black : Colors.white;
