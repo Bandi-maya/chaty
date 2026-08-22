@@ -33,8 +33,9 @@ void main() {
       expect(ChatyValidators.validateEmail(''), isNotNull);
     });
 
-    test('Password validator enforces minimum strength', () {
-      expect(ChatyValidators.validatePassword('secret123'), isNull);
+    test('Password validator enforces production strength', () {
+      expect(ChatyValidators.validatePassword('Aa1!aaaaaaaa'), isNull);
+      expect(ChatyValidators.validatePassword('secret123'), isNotNull);
       expect(ChatyValidators.validatePassword('123'), isNotNull);
       expect(ChatyValidators.validatePassword(''), isNotNull);
     });

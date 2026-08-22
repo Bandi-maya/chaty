@@ -7,6 +7,7 @@ import '../../injection/locator.dart';
 import '../../ui/core/design_system/components/chaty_kit.dart';
 import '../../ui/core/persistence/preferences_storage.dart';
 import '../../ui/core/theme/theme_controller.dart';
+import '../../ui/core/validators/input_validators.dart';
 import '../../ui/core/widgets/username_availability_field.dart';
 import '../chats/main_navigation_shell.dart';
 import 'widgets/auth_components.dart';
@@ -141,12 +142,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   String _friendlyError(Object error) {
     final value = error.toString().replaceFirst('Exception: ', '');
-    if (value.contains('already registered'))
+    if (value.contains('already registered')) {
       return 'An account already exists for this email. Sign in instead.';
-    if (value.contains('already taken'))
+    }
+    if (value.contains('already taken')) {
       return 'That username was just taken. Choose one of the available suggestions.';
-    if (value.contains('rate limit'))
+    }
+    if (value.contains('rate limit')) {
       return 'Too many attempts. Wait a moment and try again.';
+    }
     return value;
   }
 
@@ -197,15 +201,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       controller: _emailController,
                       theme: theme,
                       keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        final email = value?.trim() ?? '';
-                        if (email.isEmpty) return 'Please enter your email';
-                        final valid = RegExp(
-                          r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
-                        ).hasMatch(email);
-                        if (!valid) return 'Please enter a valid email address';
-                        return null;
-                      },
+                      validator: ChatyValidators.validateEmail,
                     ),
                     const SizedBox(height: 18),
                     UsernameAvailabilityField(
@@ -240,7 +236,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     const SizedBox(height: 18),
                     AuthTextField(
                       label: 'Password',
-                      hintText: 'Enter password',
+                      hintText: '12+ characters with upper/lowercase, number & symbol',
                       controller: _passwordController,
                       obscureText: _obscurePassword,
                       theme: theme,
@@ -259,19 +255,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           () => _obscurePassword = !_obscurePassword,
                         ),
                       ),
-                      validator: (value) {
-                        final password = value ?? '';
-                        if (password.isEmpty)
-                          return 'Please enter your password';
-                        if (password.length < 8)
-                          return 'Password must be at least 8 characters';
-                        if (!RegExp(r'[A-Z]').hasMatch(password) ||
-                            !RegExp(r'[a-z]').hasMatch(password) ||
-                            !RegExp(r'[0-9]').hasMatch(password)) {
-                          return 'Use upper/lowercase letters and a number';
-                        }
-                        return null;
-                      },
+                      validator: ChatyValidators.validatePassword,
                     ),
                     const SizedBox(height: 24),
                     if (_errorMessage != null)
@@ -292,10 +276,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       isLoading: _isLoading,
                       theme: theme,
                     ),
-                    const SizedBox(height: 20),
-                    AuthOrDivider(theme: theme),
-                    const SizedBox(height: 20),
-                    AuthSocialRow(theme: theme),
                     const SizedBox(height: 28),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
